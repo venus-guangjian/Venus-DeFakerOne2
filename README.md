@@ -1,2 +1,1 @@
-# Venus-DeFakerOne2
-Venus-DeFakerOne2: Vision Forensic Foundation Model
+Venus-DeFakerOne2 Project Page
