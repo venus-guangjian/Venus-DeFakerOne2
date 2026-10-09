@@ -1214,7 +1214,7 @@ const D = {
   /* 待补素材清单 */
   assets: [
     { p:"hi",  t:"Figure 3 · 总体框架图", d:"方法章节的主视觉", s:"论文 <code>Figure 3</code> 矢量源文件（<code>.pdf/.svg</code>）或 PNG @2x，宽度 ≥ 1600px。SVG 优先——缩放后文字仍清晰。" },
-    { p:"hi",  t:"象限样例素材 · demos/", d:"Capability Boundary 下方 Real/Fake 双轨轮播的数据源", s:"网页同目录建 <code>demos/</code>，下含 8 个子文件夹（<code>real|fake × digital|physical × image|video</code>）。图像为 <code>.jpg/.png/.webp</code>，视频统一导出 <code>.gif</code>；文件名建议 <code>1.gif / 2.gif …</code> 连号（页面会自动探测），或在每个文件夹放 <code>list.txt</code> 逐行列出文件名。" },
+    { p:"hi",  t:"象限样例素材 · demo/", d:"Capability Boundary 下方 Real/Fake 双轨轮播的数据源", s:"网页同目录建 <code>demo/</code>，下含 8 个子文件夹（<code>real|fake × digital|physical × image|video</code>）。图像为 <code>.jpg/.png/.webp</code>，视频统一导出 <code>.gif</code>；文件名建议 <code>1.gif / 2.gif …</code> 连号（页面会自动探测），或在每个文件夹放 <code>list.txt</code> 逐行列出文件名。" },
     { p:"hi",  t:"像素级定位可视化", d:"Results 章节最有说服力的一屏", s:"输入图 / GT mask / Ours pred / Baseline pred 的网格对比，4–6 组样例，每格 ≥ 512px。" },
     { p:"hi",  t:"论文与代码链接", d:"导航与资源卡的真实 URL", s:"arXiv/内部 PDF 链接、GitHub 仓库（当前为 <code>venus-guangjian/Venus-DeFakerOne2</code>，需确认是否已公开）、模型权重下载地址。" },
     { p:"mid", t:"RRVBench 样例视频", d:"Benchmark 章节的动态展示", s:"3–4 段谣言场景假视频（<code>.mp4</code>，H.264，≤ 5MB/段，静音循环自动播放）。无视频时可退化为关键帧拼图。" },
@@ -1257,11 +1257,11 @@ renderCell("di");
 
 /* ============================================================
    Fig.1 图位 · Real / Fake 双轨恒速轮播
-   数据源：同目录 demos/<folder>/，视频象限内文件均为 .gif
+   数据源：同目录 demo/<folder>/，视频象限内文件均为 .gif
    象限 → 两个文件夹（real 轨 / fake 轨）
    ============================================================ */
 const DEMO_CFG = {
-  root: "demos",
+  root: "demo",
   /* 恒定线速度：像素 / 秒（改这里即可整体加减速） */
   speed: 60,
   exts: ["gif", "jpg", "jpeg", "png", "webp"],
@@ -1294,14 +1294,14 @@ function shuffleUrls(arr){
   return a;
 }
 
-const QUADRANT_DEMOS = {
+const QUADRANT_demo = {
   di: { label:"Digital × Image", real:"real_digital_image", fake:"fake_digital_image" },
   dv: { label:"Digital × Video", real:"real_digital_video", fake:"fake_digital_video" },
   pi: { label:"Physical × Image", real:"real_physical_image", fake:"fake_physical_image" },
   pv: { label:"Physical × Video", real:"real_physical_video", fake:"fake_physical_video" }
 };
 
-/* --- 探测某个 demos 子文件夹内的可用图片（并行，适配单文件夹 30+ 样本） --- */
+/* --- 探测某个 demo 子文件夹内的可用图片（并行，适配单文件夹 30+ 样本） --- */
 function probeFolder(dir){
   const base = `${DEMO_CFG.root}/${dir}/`;
 
@@ -1403,13 +1403,13 @@ function buildTrack(rowEl, urlsAll){
     const empty = document.createElement("div");
     empty.className = "dm-empty";
     empty.innerHTML = `<b>No samples found</b>
-      <span>请在网页同目录放置 <code>demos/${rowEl.dataset.dir}/</code>，<br>文件名为 <code>1.gif / 2.gif …</code>（或在该文件夹内放 <code>list.txt</code> 逐行列出文件名）。</span>`;
+      <span>请在网页同目录放置 <code>demo/${rowEl.dataset.dir}/</code>，<br>文件名为 <code>1.gif / 2.gif …</code>（或在该文件夹内放 <code>list.txt</code> 逐行列出文件名）。</span>`;
     rowEl.appendChild(empty);
     return;
   }
 
   /* 样本过多时等距抽样，保留多样性同时控制并发解码量
-     （urlsAll 已在 renderDemos 中洗过牌，故此处等距抽样 = 随机抽样） */
+     （urlsAll 已在 renderdemo 中洗过牌，故此处等距抽样 = 随机抽样） */
   let urls = urlsAll;
   const cap = DEMO_CFG.maxPerSeg;
   if(urls.length > cap){
@@ -1452,8 +1452,8 @@ function fitSpeed(rowEl){
 
 /* --- 切换象限 --- */
 let demoToken = 0;
-async function renderDemos(key){
-  const cfg = QUADRANT_DEMOS[key] || QUADRANT_DEMOS.di;
+async function renderdemo(key){
+  const cfg = QUADRANT_demo[key] || QUADRANT_demo.di;
   const rows = $$("#demoFig .dm-row");
   const token = ++demoToken;
 
@@ -1476,9 +1476,9 @@ async function renderDemos(key){
 }
 
 $$(".cell").forEach(btn=>{
-  btn.addEventListener("click", ()=>renderDemos(btn.dataset.cell));
+  btn.addEventListener("click", ()=>renderdemo(btn.dataset.cell));
 });
-renderDemos("di");
+renderdemo("di");
 
 /* 触屏无 hover：点按暂停/继续，并相应改写提示文案 */
 (function(){
