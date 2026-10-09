@@ -1,6 +1,8 @@
 
 
 
+
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -122,7 +124,9 @@ nav.top a.nv:hover{color:var(--tx-hi);background:oklch(1 0 0 / .06)}
    HERO
    ============================================================ */
 .hero{padding:clamp(56px,9vw,108px) 0 clamp(40px,6vw,72px);overflow:hidden}
-.hero-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);gap:clamp(28px,5vw,60px);align-items:center}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);gap:clamp(28px,5vw,60px);align-items:stretch}
+.hero-left{display:flex;flex-direction:column;justify-content:flex-start}
+.hero-left .btns{margin-top:auto}
 .hero h1{font-size:clamp(38px,6.6vw,78px);line-height:1.0;letter-spacing:-.032em;margin-bottom:20px}
 .hero h1 .num{
   font-family:var(--sans);font-weight:800;letter-spacing:-.05em;
@@ -135,14 +139,15 @@ nav.top a.nv:hover{color:var(--tx-hi);background:oklch(1 0 0 / .06)}
 .meta-line i{font-style:normal;color:var(--real);font-size:9px}
 
 /* 潮汐动画 */
-.tide{position:relative;border:1px solid oklch(1 0 0 / .11);border-radius:var(--r);background:linear-gradient(180deg,var(--ink-850),var(--ink-900));padding:0;overflow:hidden}
-.tide img{display:block;width:100%;height:auto}
+.tide{position:relative;border:1px solid oklch(1 0 0 / .11);border-radius:var(--r);background:linear-gradient(180deg,var(--ink-850),var(--ink-900));padding:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+.tide .jev-pipe{display:block;width:100%;max-width:512px;height:auto;flex:none;margin:0 auto}
+.tide img.teaser{width:100%;max-width:512px;height:auto;aspect-ratio:1/1;object-fit:contain;display:block;margin:0 auto;flex:none}
 
 /* ============================================================
    数字带
    ============================================================ */
-.stats{border-block:1px solid oklch(1 0 0 / .1);background:oklch(1 0 0 / .022)}
-.stats .row{display:grid;grid-template-columns:repeat(5,1fr)}
+.stats{background:none}
+.stats .row{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid oklch(1 0 0 / .08);background:oklch(1 0 0 / .022)}
 .stat{padding:clamp(20px,3vw,30px) clamp(12px,1.4vw,20px);border-right:1px solid oklch(1 0 0 / .08);border-bottom:1px solid oklch(1 0 0 / .08)}
 .stat:nth-child(5n){border-right:0}
 .stat:nth-last-child(-n+5){border-bottom:0}
@@ -179,6 +184,50 @@ nav.top a.nv:hover{color:var(--tx-hi);background:oklch(1 0 0 / .06)}
 .fade-img{opacity:0;transition:opacity 1.1s ease;animation:imgFadeFallback .9s ease 3s forwards}
 .fade-img.loaded,.fade-img.is-shown{opacity:1}
 @keyframes imgFadeFallback{to{opacity:1}}
+
+/* ============================================================
+   JEV 流水线 SVG —— Hero 右侧上方示意图（512×256）
+   风格参考 jev_svg.svg，颜色适配深色主题
+   ============================================================ */
+.jev-pipe{--jstroke:oklch(0.72 0.13 202);--jaccent:oklch(0.84 0.105 202);--jdim:oklch(0.6 0.02 232)}
+.jev-pipe .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;fill:var(--tx-mid);text-transform:uppercase}
+.jev-pipe .ttl{font-family:var(--serif);font-size:11px;fill:var(--tx-hi);font-weight:600}
+.jev-pipe .val{font-family:var(--mono);font-size:12px;fill:var(--jaccent);font-weight:700}
+.jev-pipe .box-fill{fill:oklch(1 0 0 / .035);stroke:var(--jstroke);stroke-width:1.5}
+.jev-pipe .wire{stroke:var(--jstroke);stroke-width:1.8;fill:none;stroke-linecap:round}
+.jev-pipe .arrow{fill:var(--jstroke);animation:jevArrow 2.8s ease-in-out infinite}
+@keyframes jevArrow{
+  0%,100%{fill:var(--jstroke)}
+  45%,60%{fill:oklch(0.95 0.12 202)}
+}
+.jev-pipe .funnel-stroke{stroke:var(--jstroke);stroke-width:2;fill:none;stroke-linejoin:round}
+.jev-pipe .bracket{stroke:var(--jdim);stroke-width:2;fill:none;stroke-linecap:round}
+.jev-pipe .icon-stroke{stroke:var(--jaccent);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.jev-pipe .icon-fill{fill:var(--jaccent)}
+
+/* 电流亮光：沿连接线从左向右循环通过，并依次点亮箭头与矩形框 */
+.jev-pipe .spark{
+  stroke:oklch(0.95 0.12 202);stroke-width:3;fill:none;stroke-linecap:round;
+  stroke-dasharray:40 1000;stroke-dashoffset:1040;
+  animation:jevSpark 2.8s linear infinite;
+  filter:drop-shadow(0 0 4px oklch(0.84 0.105 202 / .8));
+}
+.jev-pipe .spark-2{animation-delay:.55s;animation-duration:2.8s;stroke:oklch(0.88 0.14 68)}
+.jev-pipe .spark-3{animation-delay:1.1s;animation-duration:2.8s}
+@keyframes jevSpark{
+  0%{stroke-dashoffset:1040}
+  100%{stroke-dashoffset:-40}
+}
+/* 矩形框随电流依次亮起（Input → Model → Prediction） */
+.jev-pipe .box-fill{animation:jevBox 2.8s ease-in-out infinite;animation-delay:var(--bd,0s)}
+.jev-pipe .box-2{--bd:.55s}
+.jev-pipe .box-3{--bd:1.55s}
+@keyframes jevBox{
+  0%,100%{stroke:var(--jstroke);fill:oklch(1 0 0 / .035)}
+  35%,55%{stroke:oklch(0.95 0.12 202);fill:oklch(0.84 0.105 202 / .09)}
+}
+/* 箭头随电流亮起（第二个箭头延迟对齐 Model→Prediction 段） */
+.jev-pipe .arrow-2{animation-delay:.6s}
 
 .sec-head{margin-bottom:clamp(34px,4.5vw,56px);max-width:78ch}
 
@@ -305,10 +354,11 @@ figcaption{font-family:var(--mono);font-size:12.5px;letter-spacing:.05em;color:o
 
 /* --- Capability Boundary · Real / Fake 双轨恒速轮播 --- */
 .mx-note{
-  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--tx-low);margin:14px 0 0;display:flex;align-items:center;gap:9px
+  font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:.01em;
+  color:var(--tx-mid);margin:22px 0 0;display:block;text-align:center;
+  /* 让文字中线对齐 2×2 网格中心：右侧让出 96px 轴标签列 + 10px 间距 */
+  margin-left:106px
 }
-.mx-note::before{content:"";flex:none;width:22px;height:1px;background:var(--fake-dim)}
 
 .fig.demofig{
   display:flex;flex-direction:column;gap:0;padding:0;min-height:280px;
@@ -475,12 +525,17 @@ input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.16)}
 .brow .bn{font-size:13.5px;color:oklch(0.3 0.02 232);line-height:1.4;text-align:right}
 .brow .bn small{display:block;font-family:var(--mono);font-size:12px;color:oklch(0.43 0.02 232);letter-spacing:.06em}
 .btrack{position:relative;height:44px;display:flex;flex-direction:column;justify-content:center;gap:3px}
-.bfill{height:11px;border-radius:1px;position:relative;transform-origin:left;animation:grow .9s cubic-bezier(.2,.8,.2,1) both}
+/* 初始状态：柱子宽度为 0（隐藏在左侧），数值标签透明 —— 等待滚动进入视口后由 .bars.play 触发 */
+.bfill{height:11px;border-radius:1px;position:relative;transform-origin:left;transform:scaleX(0)}
 .bfill.sota{background:linear-gradient(90deg,oklch(0.62 0.12 55),oklch(0.7 0.15 55))}
 .bfill.v1{background:oklch(0.72 0.02 232)}
 .bfill.v2{background:linear-gradient(90deg,var(--real-dim),oklch(0.72 0.13 202))}
-.bfill span{position:absolute;right:-4px;top:50%;transform:translate(100%,-50%);font-family:var(--mono);font-size:12px;color:oklch(0.3 0.02 232);white-space:nowrap}
+.bfill span{position:absolute;right:-4px;top:50%;transform:translate(100%,-50%);font-family:var(--mono);font-size:12px;color:oklch(0.3 0.02 232);white-space:nowrap;opacity:0}
+/* 进入视口后：从左往右逐根长出，数值随柱尾浮现 */
+.bars.play .bfill{animation:grow .95s cubic-bezier(.16,.84,.24,1) both;animation-delay:var(--d,0ms)}
+.bars.play .bfill span{animation:numIn .5s ease both;animation-delay:calc(var(--d,0ms) + 560ms)}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes numIn{from{opacity:0;transform:translate(calc(100% - 6px),-50%)}to{opacity:1;transform:translate(100%,-50%)}}
 
 .dom-table{width:100%;border-collapse:collapse;font-size:14px}
 .dom-table caption{text-align:left;font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:oklch(0.5 0.12 60);padding-bottom:14px}
@@ -556,6 +611,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
   .stat:nth-last-child(-n+2){border-bottom:0}
   .mx-detail{position:static}
   .phases{grid-template-columns:1fr}
+  .tide img.teaser{width:100%;max-width:512px;height:auto;aspect-ratio:1/1}
 }
 @media (max-width:620px){
   .route{grid-template-columns:1fr}
@@ -564,6 +620,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
   .cell{min-height:128px;padding:14px}
   .brow{grid-template-columns:1fr;gap:6px}
   .brow .bn{text-align:left}
+  .mx-note{margin-left:0}
   .stats .row{grid-template-columns:1fr}
   .stat{border-right:0}
   .stat:nth-child(5n){border-right:0}
@@ -576,6 +633,8 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
   .rv{opacity:1;transform:none}
   .fade-img{opacity:1;transition:none}
+  .jev-pipe .spark{stroke-dashoffset:0;animation:none}
+  .jev-pipe .box-fill,.jev-pipe .arrow{animation:none}
 }
 </style>
 </head>
@@ -599,16 +658,18 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
 <!-- ========== HERO ========== -->
 <header class="hero" id="top">
   <div class="wrap hero-grid">
-    <div>
+    <div class="hero-left">
       <p class="eyebrow">GuangJian Team · Ant Group · Technical Report</p>
       <h1>Venus&#8209;<br>DeFakerOne<span class="num">2</span></h1>
       <p class="sub">A Vision-Forensics Foundation Model<br>with Broader Coverage</p>
       <p class="lede">真实世界的伪造是异质的：它既以数字篡改的形式出现，也以物理翻拍/面具攻击的形式出现；既由图像承载，也由视频承载。DeFakerOne2 用<b style="color:var(--tx-hi);font-weight:600">一套 2B 参数</b>同时覆盖 {digital, physical} × {image, video} 的完整矩阵，在 8 个领域全部排名第一。</p>
+      <p class="lede">DeFakerOne2是<b style="color:var(--tx-hi);font-weight:600">视觉防伪领域的Jev</b>。作为首款视觉防伪System One模型，DeFakerOne2以单token这种最高效预测形式做真假二类决策，并输出可靠置信度。为防伪实际应用下游微调&nbsp提供垂域专精基座。</p>
       <div class="meta-line">
         <span><i>◆</i>2026-09-01</span>
         <span><i>◆</i>Qwen3.5-2B backbone</span>
         <span><i>◆</i>~50M training samples</span>
         <span><i>◆</i>53 detection + 14 localization benchmarks</span>
+        <span><i>◆</i>Binary Decision</span>
       </div>
       <div class="btns">
         <a class="btn solid" href="#resources"><span class="k">↓</span> Paper</a>
@@ -619,7 +680,61 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
     </div>
 
     <div class="tide rv" aria-label="DefakerOne2 能力覆盖总览图">
-      <img class="fade-img" src="images/teaser.png" alt="DefakerOne2: Stronger &amp; Broader Defense Coverage — 覆盖 {digital, physical} × {image, video} 全矩阵的雷达图">
+      <svg class="jev-pipe" viewBox="0 0 512 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- ── 图标题 ── -->
+        <text class="ttl" x="256" y="26" text-anchor="middle" style="font-size:14px">Jev-Style System One Model for Unified Vision Forensics</text>
+
+        <!-- ── 电流火花线（Input→Model，底层为箭头与框，火花在其上） ── -->
+        <path class="wire spark" d="M82 148 L150 148"/>
+        <path class="wire spark spark-2" d="M82 148 L150 148"/>
+        <path class="wire spark spark-3" d="M82 148 L150 148"/>
+        <!-- Input → Model -->
+        <path class="wire" d="M82 148 H150"/>
+        <polygon class="arrow" points="160,148 152,144 152,152"/>
+
+        <!-- ── Input 框（与 Model/Prediction 等高） ── -->
+        <rect class="box-fill" x="12" y="56" width="70" height="184" rx="4"/>
+        <text class="lbl" x="47" y="50" text-anchor="middle">Input</text>
+        <!-- 图像图标 -->
+        <g transform="translate(22,86)">
+          <rect class="icon-stroke" x="0" y="0" width="50" height="36" rx="2"/>
+          <circle class="icon-stroke" cx="10" cy="9" r="2.5" fill="var(--jaccent)" stroke="none"/>
+          <path class="icon-stroke" d="M2 32 L14 20 L24 28 L34 14 L48 32 Z"/>
+        </g>
+        <text class="ttl" x="47" y="140" text-anchor="middle">Image</text>
+        <!-- 视频图标 -->
+        <g transform="translate(22,154)">
+          <rect class="icon-stroke" x="0" y="0" width="50" height="36" rx="2"/>
+          <path class="icon-stroke" d="M0 12 L50 12 M0 24 L50 24"/>
+          <polygon class="icon-fill" stroke="none" points="20,6 34,18 20,30"/>
+        </g>
+        <text class="ttl" x="47" y="208" text-anchor="middle">Video</text>
+
+        <!-- ── Model 框（矩形，与其他框等高） ── -->
+        <rect class="box-fill box-2" x="160" y="56" width="96" height="184" rx="4"/>
+        <text class="lbl" x="208" y="50" text-anchor="middle">Model</text>
+        <text class="ttl" x="208" y="142" text-anchor="middle">Venus-</text>
+        <text class="ttl" x="208" y="162" text-anchor="middle">DeFakerOne2</text>
+
+        <!-- ── 连接线：Model→Prediction（单箭头） ── -->
+        <path class="wire" d="M256 148 L322 148"/>
+        <path class="wire spark" d="M256 148 L322 148"/>
+        <path class="wire spark spark-2" d="M256 148 L322 148"/>
+        <polygon class="arrow arrow-2" points="330,148 322,144 322,152"/>
+
+        <!-- ── Prediction 框 ── -->
+        <rect class="box-fill box-3" x="330" y="56" width="170" height="184" rx="4"/>
+        <text class="lbl" x="415" y="50" text-anchor="middle">Prediction</text>
+        <!-- Real / Fake -->
+        <text class="ttl" x="415" y="116" text-anchor="middle">Real / Fake</text>
+        <text class="lbl" x="415" y="130" text-anchor="middle">Binary Decision</text>
+        <!-- 分隔线 -->
+        <line class="wire" x1="350" y1="152" x2="480" y2="152" opacity=".3"/>
+        <!-- Confidence -->
+        <text class="val" x="415" y="182" text-anchor="middle">0.9736</text>
+        <text class="lbl" x="415" y="196" text-anchor="middle">Reliable Confidence</text>
+      </svg>
+      <img class="fade-img teaser" src="images/teaser.png" alt="DefakerOne2: Stronger &amp; Broader Defense Coverage — 覆盖 {digital, physical} × {image, video} 全矩阵的雷达图">
     </div>
   </div>
 </header>
@@ -649,7 +764,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
   <figure class="whitefig rv">
     <div class="wf-box">
       <img class="fade-img" src="images/figure2.png" alt="Figure 2 — DeFakerOne2 在视觉防伪任务上取得全面领先的性能">
-      <figcaption class="wf-cap">Fig. 1 — DeFakerOne2在视觉防伪任务上取得全面领先的性能</figcaption>
+      <figcaption class="wf-cap">Fig. 1 — DeFakerOne2在视觉防伪任务上取得全面领先的性能，大幅度超越上一代防伪基模DefakerOne及各领域最优专家模型。</figcaption>
     </div>
   </figure>
 </div>
@@ -660,7 +775,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
     <div class="sec-head rv">
       <p class="eyebrow">01 — Capability Boundary</p>
       <h2>把碎片化的检测器，收敛成一个基础模型</h2>
-      <p class="lede" style="margin-top:18px">数字图像取证、人脸活体、证件防伪、视频取证——这四个社区长期各自维护 benchmark、假设与模型设计，尽管目标完全相同：区分真实媒体与伪造媒体。点击下方矩阵任一格，查看该象限覆盖的任务与 benchmark。</p>
+      <p class="lede" style="margin-top:18px">图像数字攻击取证、图像物理攻击取证、视频数字攻击取证、视频物理攻击取证——这四个社区长期各自维护 benchmark、知识路线与模型设计。尽管核心目标完全相同：区分真实媒体与伪造媒体，却未能实现通用建模与统一。<br>点击下方矩阵任一格，查看该象限覆盖的任务与代表性 benchmark。</p>
     </div>
 
     <div class="matrix-wrap">
@@ -676,7 +791,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
             <span class="tag">Digital × Image</span>
             <span class="ttl">数字图像伪造</span>
             <span class="v1"><i class="dot-y"></i>V1 已覆盖</span>
-            <span class="bm">AIGC · DeepFake · 证件篡改 · 自然图拼接</span>
+            <span class="bm">AIGC · DeepFake · 文字图形篡改 · 自然图形篡改</span>
           </button>
           <button class="cell" data-cell="dv" aria-pressed="false">
             <span class="tag">Digital × Video</span>
@@ -688,7 +803,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
             <span class="tag">Physical × Image</span>
             <span class="ttl">物理图像攻击</span>
             <span class="v1"><i class="dot-n"></i>V1 未覆盖</span>
-            <span class="bm">人脸活体 · 证件翻拍/屏幕攻击</span>
+            <span class="bm">人脸面具及翻拍攻击 · 证件翻拍/屏幕攻击</span>
           </button>
           <button class="cell" data-cell="pv" aria-pressed="false">
             <span class="tag">Physical × Video</span>
@@ -734,7 +849,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
     <div class="sec-head rv">
       <p class="eyebrow">02 — Method</p>
       <h2>三项核心设计</h2>
-      <p class="lede" style="margin-top:18px">在约 5000 万条反伪造语料上训练一个统一模型，面临两个硬问题：<b>训练成本</b>与<b>样本难度极不均衡</b>；以及视频取证中的<b>模态两难</b>。下面三项设计分别回应。</p>
+      <p class="lede" style="margin-top:18px">在约 5000 万条反伪造语料上训练一个统一模型，面临两个硬问题：<b>样本难度极不均衡</b>与<b>理想训练方式不同</b>；以及视频取证中的<b>模态两难</b>。下面三项设计分别回应。</p>
     </div>
 
     <figure class="rv" style="margin:0 0 clamp(40px,5vw,60px)">
@@ -742,14 +857,14 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
         <img class="fade-img" src="images/model.png" alt="DeFakerOne2 总体框架：Vision Encoder + Anomaly Magnifier → LLM → Pred Mask">
         <img class="fade-img" src="images/shanon.png" alt="Tide-Style Tuning：LoRA 退潮 → 全参涨潮 → LoRA 再退潮的三阶段训练示意">
       </div>
-      <figcaption>Fig. 3 — DeFakerOne2 总体框架：单一模型同时输出图像/视频级检测结论与像素级定位掩码。</figcaption>
+      <figcaption>&nbsp&nbsp&nbsp&nbsp&nbsp&nbspFig. 2 — DeFakerOne2 总体框架与潮汐微调策略 (Tide-Style Tuning)。&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp Fig. 3 — DeFakerOne2 的模态协同策略 (Modality Synergism)。</figcaption>
     </figure>
 
     <div class="pillars rv">
       <article class="pillar">
         <span class="idx">/ 01</span>
         <h3>Tide-Style Tuning</h3>
-        <p>像潮汐一样涨落交替的三阶段训练：LoRA 退潮（低成本对齐、保留 Qwen3.5 知识与推理能力）→ 全参涨潮（释放全部参数预算拟合大规模异质语料）→ LoRA 再退潮（低成本继续优化难样本新样本，防止在海量易样本上过拟合）</p>
+        <p>像潮汐一样涨落交替的三阶段训练：LoRA 退潮（低成本对齐、保留 Qwen3.5 知识与隐式逻辑分析能力）→ 全参涨潮（释放全部参数预算拟合大规模异质语料）→ LoRA 再退潮（低成本继续优化难样本和新样本，并防止在海量易样本上过拟合）。</p>
         <div class="formula">LoRA(τ₁) → merge → Full(τ₂) → LoRA(τ₃)<br>noise: light → medium → heavy<br>data: initial → full → new/hard</div>
       </article>
 
@@ -764,7 +879,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
       <article class="pillar">
         <span class="idx">/ 03</span>
         <h3>Anomaly Magnifier + Calibration Loop</h3>
-        <p>以 DINOMAC 为编码器强化细粒度线索感知。并用全局判定 p 动态推导像素阈值 τ(p)，让定位决策边界基于全局证据校准。同时减少: 1. 真实图上的过分割假阳和 2. 伪造图上的漏检。</p>
+        <p>以 DINOMAC 为辅助编码器强化细粒度线索感知，提供更加准确的伪造像素定位能力。并用全局判定 p 动态推导像素预测的二值化阈值 τ(p)，让定位决策边界基于全局证据校准。同时减少: 1. 真实图上的过分割假阳和 2. 伪造图上的漏检。</p>
         <div class="formula">τ(p) = 0.75 − p/2 = ½ + ½(½ − p)<br>M_cal = 𝟙[ M &gt; τ(p) ]</div>
       </article>
     </div>
@@ -790,9 +905,9 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
         </div>
         <p class="desc">横轴是训练进程。LoRA 与全参微调交替进行：退潮时低成本对齐与正则化，涨潮时释放全部参数容量。注意每阶段配套的<b style="color:var(--tx)">数据构成</b>与<b style="color:var(--tx)">噪声强度</b>如何变化。</p>
         <div class="phases" id="phases">
-          <div class="ph on" data-ph="0"><div class="nm">Phase 1 · Ebb</div><div class="ds">Adaptation Ebb</div><div class="tr">LoRA 微调通用预训练 Qwen3.5，作为 warm-up 借强先验促泛化。<br><span style="color:var(--real)">数据：Initial Data · 噪声：light</span></div><i class="bar"></i></div>
-          <div class="ph" data-ph="1"><div class="nm">Phase 2 · Flood</div><div class="ds">Full-Parameter Flood</div><div class="tr">LoRA 权重合并入骨干后做全参微调，释放全部参数预算拟合大规模异质伪造语料。<br><span style="color:var(--fake)">数据：Full Data · 噪声：medium</span></div><i class="bar"></i></div>
-          <div class="ph" data-ph="2"><div class="nm">Phase 3 · Ebb</div><div class="ds">Hard-Sample Ebb</div><div class="tr">回到 LoRA，作为正则项把模型导向难样本，防止在海量易样本上过拟合。<br><span style="color:var(--real)">数据：New / Hard Data · 噪声：heavy</span></div><i class="bar"></i></div>
+          <div class="ph on" data-ph="0"><div class="nm">Phase 1 · Ebb</div><div class="ds">Adaptation Ebb</div><div class="tr">LoRA 微调通用预训练 Qwen3.5，适配防伪任务同时尽量保留隐式常识与逻辑辅助分析能力。<br><span style="color:var(--real)">数据：Initial Data · 噪声：Light</span></div><i class="bar"></i></div>
+          <div class="ph" data-ph="1"><div class="nm">Phase 2 · Flood</div><div class="ds">Full-Parameter Flood</div><div class="tr">LoRA 权重合并入骨干后做全参微调，释放全部参数预算拟合大规模异质伪造语料。<br><span style="color:var(--fake)">数据：Full Data · 噪声：Medium</span></div><i class="bar"></i></div>
+          <div class="ph" data-ph="2"><div class="nm">Phase 3 · Ebb</div><div class="ds">Hard-Sample Ebb</div><div class="tr">回到 LoRA，作为正则项把模型导向难样本新样本，防止在海量易样本上过拟合。降低训练成本。<br><span style="color:var(--real)">数据：New / Hard Data · 噪声：Heavy</span></div><i class="bar"></i></div>
         </div>
         <div class="ctrl">
           <label for="tideRange">Training Stages</label>
@@ -837,7 +952,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
           <h3>③ Calibration Loop · τ(p) 动态阈值</h3>
           <span class="hint">拖动 → 改变全局判定 p</span>
         </div>
-        <p class="desc">只用区域级监督训练的像素解码器对所有输入一视同仁，容易把真实图上「显著但无害」的区域（纹理边界、强边缘、压缩痕迹）误判为篡改。校准环把定位决策边界<b style="color:var(--tx)">条件化于全局判定 p</b>：p→1 时阈值降到 0.25，弱但真实的篡改线索不再被压制；p→0 时阈值升到 0.75，只有极显著异常才能通过。p=0.5 时退化为传统固定阈值——校准从不注入全局证据不支持的偏置。</p>
+        <p class="desc">像素解码器对所有输入一视同仁，容易把真实图上「显著但无害」的区域（纹理边界、强边缘、压缩痕迹）误判为篡改。校准环把定位决策边界<b style="color:var(--tx)">条件化于全局判定 p</b>：p→1 时阈值降到 0.25，弱但真实的篡改线索不再被压制；p→0 时阈值升到 0.75，只有极显著异常才能通过。p=0.5 时退化为传统固定阈值——校准从不注入全局证据不支持的偏置。</p>
         <div class="calib">
           <div>
             <div class="ctrl" style="margin-bottom:18px">
@@ -902,7 +1017,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
     <div class="sec-head rv">
       <p class="eyebrow">05 — New Benchmark</p>
       <h2>RRVBench<span style="color:var(--tx-low);font-size:.55em;font-family:var(--mono);letter-spacing:0"> · Realistic Rumor Video Benchmark</span></h2>
-      <p class="lede" style="margin-top:18px">公开视频取证数据集里的假视频，多由一年以上发布的旧生成器合成。为跟上 AIGC 视频生成的演进速度，我们构建了 RRVBench：假视频全部由 <b style="color:var(--tx-hi)">7 个最新闭源</b>与 <b style="color:var(--tx-hi)">4 个最新开源</b>生成器合成，内容聚焦真实世界谣言场景，最大限度缩小应用鸿沟。</p>
+      <p class="lede" style="margin-top:18px">公开视频取证数据集里的假视频，多由一年以上发布的旧生成器合成。为跟上 AIGC 视频生成的演进速度，我们构建了 RRVBench：假视频全部由 <b style="color:var(--tx-hi)">7 个最新闭源</b>（如SeeDance2.5）与 <b style="color:var(--tx-hi)">4 个最新开源</b>（如MiniMaxH3）生成器合成，内容聚焦真实世界谣言场景，最大限度缩小应用鸿沟。</p>
     </div>
 
     <div class="rrv">
@@ -915,16 +1030,15 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
           <div class="lab-hd" style="justify-content:flex-start">最新假视频生成器 ● 真实视频伪造场景</div>
           <p class="desc" style="margin-bottom:0">RRVBench 是视频评测中对泛化能力严苛的考验。有基线在某子集上表现尚可，却在新生成器上骤降——说明它锁定的是<b style="color:var(--tx)">生成器指纹</b>而非伪造本质。DeFakerOne2 的各子集分数相对稳定，最弱的子集仍显著高于外部方法的最佳成绩。</p>
         </div>
-        <!-- ===== Fig.6 · 伪造样例 GIF 矩阵（4 行 × 3 列，每次打开随机排列） ===== -->
+        <!-- ===== Fig.6 · 伪造样例 GIF 矩阵（3 列，首行 1:1 + 15 格 2:1，每次打开随机排列） ===== -->
         <figure style="margin:0">
           <div class="fig on-dark giffig">
             <div class="giffig-hd">
-              <b>Figure 6 · Forgery Samples</b>
-              <span>RRVBench 中聚焦真实谣言场景的伪造视频样例 — 首行 3 图为 1:1，其余 9 图为 2:1 宽幅；每次加载页面随机重排。</span>
+              <b>Figure 4 · Generated Video Samples in RRVBench</b>
             </div>
             <div class="gifmatrix" id="gifMatrix"><!-- GIF_MATRIX --></div>
           </div>
-          <figcaption>Fig. 6 — RRVBench 中聚焦真实谣言场景的伪造视频样例（4 × 3 随机矩阵）。</figcaption>
+          <figcaption>Fig. 4 — RRVBench 数据集中的伪造视频样例。RRVBench 聚焦真实谣言场景，如战争场景、政治活动、军事行动、公共事件等。</figcaption>
         </figure>
       </div>
     </div>
@@ -972,7 +1086,7 @@ footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:okl
   <div class="wrap foot">
     <div>
       <p style="font-family:var(--serif);font-size:18px;color:var(--tx);letter-spacing:0">Venus-DeFakerOne2</p>
-      <p>GuangJian Team · Ant Group<br>Date: September 1, 2026</p>
+      <p>GuangJian Team · Ant Group<br>Technical Committee on Digital Media Forensics and Security · CSIG</p>
     </div>
     <div style="text-align:right">
       <p>Chief contributor: Chenfan Qu<br>Main contributors: Yachao Liang · Mingqi Fang<br>Project supervisors: Jingjing Liu · Jian Liu · Weiqiang Wang</p>
@@ -1162,11 +1276,23 @@ const DEMO_CFG = {
     i => `frame_${i}`,
     i => `demo_${i}`
   ],
-  maxIndex: 80,        /* 每个系列最多探测到的序号 */
-  maxMiss: 4,          /* 批尾连续失败多少次即认为已到末尾 */
-  batch: 8,            /* 并行探测的批大小 */
-  maxPerSeg: 16        /* 每条轨道单段最多渲染样本数（超出等距抽样）——GIF 会持续解码，控制并发量 */
+  maxIndex: 500,       /* 每个系列最多探测到的序号（有 list.txt 时该项不生效） */
+  maxMiss: 24,         /* 批尾连续失败多少次即认为已到末尾（≥3×batch，容忍编号空洞） */
+  batch: 16,           /* 并行探测的批大小 */
+  maxPerSeg: 9999,     /* 每条轨道单段最多渲染样本数：9999 = 全量不抽样；调小（如 16/40）可等距抽样降并发 */
+  shuffle: true        /* true = 每次刷新随机排布；false = 按 list.txt / 探测序号原序 */
 };
+
+/* --- Fisher–Yates 洗牌：返回新数组，不改动入参（shuffle:false 时原序返回） --- */
+function shuffleUrls(arr){
+  const a = arr.slice();
+  if(!DEMO_CFG.shuffle) return a;
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 const QUADRANT_DEMOS = {
   di: { label:"Digital × Image", real:"real_digital_image", fake:"fake_digital_image" },
@@ -1201,7 +1327,7 @@ function probeFolder(dir){
     try{
       const r = await fetch(base + "list.txt", {cache:"no-store"});
       if(r.ok){
-        const names = (await r.text()).split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0, 200);
+        const names = (await r.text()).split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0, 2000);
         (await Promise.all(names.map(n=>tryUrl(base + n)))).forEach(push);
         if(found.length) return found;
       }
@@ -1282,7 +1408,8 @@ function buildTrack(rowEl, urlsAll){
     return;
   }
 
-  /* 样本过多时等距抽样，保留多样性同时控制并发解码量 */
+  /* 样本过多时等距抽样，保留多样性同时控制并发解码量
+     （urlsAll 已在 renderDemos 中洗过牌，故此处等距抽样 = 随机抽样） */
   let urls = urlsAll;
   const cap = DEMO_CFG.maxPerSeg;
   if(urls.length > cap){
@@ -1342,8 +1469,9 @@ async function renderDemos(key){
   ]);
   if(token !== demoToken) return;   /* 期间已切换象限，丢弃过期结果 */
 
-  buildTrack(rows[0], realUrls);
-  buildTrack(rows[1], fakeUrls);
+  /* 洗牌只在这里做一次：resize 重建轨道（buildTrack(row, row._urls)）时顺序保持稳定 */
+  buildTrack(rows[0], shuffleUrls(realUrls));
+  buildTrack(rows[1], shuffleUrls(fakeUrls));
   rows.forEach(r=>{ r.style.transition = "opacity .45s ease"; r.style.opacity = 1; });
 }
 
@@ -1383,11 +1511,28 @@ $("#bars").innerHTML = D.bars.map((b,i)=>`
   <div class="brow">
     <div class="bn">${b.n}<small>${b.s}</small></div>
     <div class="btrack">
-      <div class="bfill sota" style="width:${b.sota}%;animation-delay:${i*90}ms"><span>${(b.ts ?? b.sota.toFixed(1))}</span></div>
-      <div class="bfill v1" style="width:${b.v1}%;animation-delay:${i*90+90}ms"><span>${(b.t1 ?? b.v1.toFixed(1))}</span></div>
-      <div class="bfill v2" style="width:${b.v2}%;animation-delay:${i*90+180}ms"><span>${(b.t2 ?? b.v2.toFixed(1))}</span></div>
+      <div class="bfill sota" style="width:${b.sota}%;--d:${i*110}ms"><span>${(b.ts ?? b.sota.toFixed(1))}</span></div>
+      <div class="bfill v1" style="width:${b.v1}%;--d:${i*110+70}ms"><span>${(b.t1 ?? b.v1.toFixed(1))}</span></div>
+      <div class="bfill v2" style="width:${b.v2}%;--d:${i*110+140}ms"><span>${(b.t2 ?? b.v2.toFixed(1))}</span></div>
     </div>
   </div>`).join("");
+
+/* 首次滚动进入视口时，柱子从左往右逐根长出（只播一次） */
+(function(){
+  const bars = $("#bars");
+  if(!bars) return;
+  if(typeof IntersectionObserver === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches){
+    bars.classList.add("play"); return;
+  }
+  const ioBars = new IntersectionObserver(es=>{
+    es.forEach(en=>{
+      if(!en.isIntersecting) return;
+      bars.classList.add("play");
+      ioBars.unobserve(bars);
+    });
+  },{threshold:.25, rootMargin:"0px 0px -6% 0px"});
+  ioBars.observe(bars);
+})();
 
 /* --- 表格（已移除，保留空实现防止引用报错） --- */
 
@@ -1474,7 +1619,7 @@ function setP(v){
   let policy, fin;
   if(p > 0.66){ policy = `宽松：弱篡改线索被保留，<i>召回优先</i>（全局置信伪造，把信心传给像素分支）`; fin = `Fake · conf <em>${(0.86+0.12*p).toFixed(4)}</em>`; }
   else if(p < 0.34){ policy = `保守：仅极显著异常通过，<em>压制假阳</em>（直接攻击真实图上的过分割主错误模式）`; fin = `Real · conf <i>${(0.86+0.12*(1-p)).toFixed(4)}</i>`; }
-  else { policy = `中性：τ ≈ 0.5，退化为传统固定阈值二值化（<em>不注入全局证据不支持的偏置</em>）`; fin = `Uncertain · conf <em>${(0.5+0.1).toFixed(4)}</em>`; }
+  else { policy = `中性：τ ≈ 0.5，退化为传统固定阈值二值化（<em>不注入全局证据不支持的偏置</em>）`; fin = `Uncertain · conf <em>${(0.5).toFixed(4)}</em>`; }
   $("#policyRead").innerHTML = policy;
   $("#finalRead").innerHTML = fin;
 }
@@ -1549,13 +1694,13 @@ $("#copyBib").addEventListener("click", async ()=>{
   setTimeout(()=>{ btn.innerHTML = '<span class="k">⧉</span> Copy'; }, 2000);
 });
 
-/* --- Fig.6 · GIF 样例矩阵：4 行 × 3 列，每次加载随机排列 --- */
+/* --- Fig.6 · GIF 样例矩阵：3 列，首行 1:1 + 15 格 2:1，每次加载随机排列 --- */
 (function(){
   const GIF_DIR = "videos/";
   /* 首行：1:1 正方形样例 */
   const SQUARE_GIFS = ["b1.gif", "covid2.gif", "zhan2.gif"];
-  /* 第 2–4 行：2:1 宽幅样例 */
-  const WIDE_GIFS = ["b2.gif","bing1.gif","bing2.gif","covid1.gif","o1.gif","o2.gif","zf1.gif","zf2.gif","zhan1.gif"];
+  /* 第 2 行起：2:1 宽幅样例（原 9 张 + 新增 new1–new6 共 15 张，整体随机排布） */
+  const WIDE_GIFS = ["b2.gif","bing1.gif","bing2.gif","covid1.gif","o1.gif","o2.gif","zf1.gif","zf2.gif","zhan1.gif","new1.gif","new2.gif","new3.gif","new4.gif","new5.gif","new6.gif"];
   const matrix = $("#gifMatrix");
   if(!matrix) return;
 
@@ -1594,7 +1739,7 @@ $("#copyBib").addEventListener("click", async ()=>{
 
   function render(){
     const squares = shuffle(SQUARE_GIFS);   /* 首行 3 格 · 1:1 */
-    const wides   = shuffle(WIDE_GIFS);     /* 第 2–4 行 9 格 · 2:1 */
+    const wides   = shuffle(WIDE_GIFS);     /* 其余 15 格 · 2:1，整体随机 */
     const frag = document.createDocumentFragment();
     squares.forEach(src => frag.appendChild(cell(src, 1)));
     wides.forEach(src => frag.appendChild(cell(src, 2)));
