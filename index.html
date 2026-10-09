@@ -1,0 +1,1618 @@
+
+
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Venus-DeFakerOne2 · A Vision-Forensics Foundation Model with Broader Coverage</title>
+<meta name="description" content="Venus-DeFakerOne2：覆盖 {digital, physical} × {image, video} 全矩阵的视觉取证基础模型。Tide-Style Tuning、Modality Synergism、RRVBench。GuangJian Team, Ant Group.">
+<style>
+/* ============================================================
+   DESIGN SYSTEM — form 来自内容的三处母题：
+   1. 潮汐 Tide-Style Tuning → 贯穿全站的水位线 / 正弦曲线
+   2. Real vs Fake 二元判定 → 全站双色：--real(冷青) / --fake(琥珀)
+   3. 取证扫描 → 极细网格 + 扫描线，作为暗底纹理（有意图，非通用霓虹）
+   ============================================================ */
+:root{
+  /* 基底：墨青暗底（带绿相，不是 #0D1117 偷懒蓝） */
+  --ink-900: oklch(0.155 0.022 232);
+  --ink-850: oklch(0.185 0.024 232);
+  --ink-800: oklch(0.215 0.026 232);
+  --ink-700: oklch(0.268 0.026 232);
+  --ink-600: oklch(0.34  0.024 232);
+
+  /* 纸面：浅底章节 */
+  --paper:   oklch(0.972 0.006 232);
+  --paper-2: oklch(0.938 0.009 232);
+  --ink-on-paper: oklch(0.21 0.02 232);
+
+  /* 二元判定色 */
+  --real:    oklch(0.84 0.105 202);   /* 真实 = 冷青 */
+  --real-dim:oklch(0.55 0.085 202);
+  --fake:    oklch(0.79 0.145 68);    /* 伪造 = 琥珀 */
+  --fake-dim:oklch(0.58 0.11 68);
+
+  /* 文本 */
+  --tx-hi:   oklch(0.965 0.006 232);
+  --tx:      oklch(0.885 0.012 232);
+  --tx-mid:  oklch(0.74  0.016 232);
+  --tx-low:  oklch(0.635 0.016 232);
+
+  --serif: "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Songti SC","Noto Serif CJK SC",serif;
+  --sans: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --mono: ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+
+  --maxw: 1180px;
+  --pad: clamp(20px, 5vw, 56px);
+  --r: 3px; /* 全站近直角：取证报告的硬朗感，拒绝圆角卡片 */
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--ink-900);color:var(--tx);
+  font-family:var(--sans);font-size:16px;line-height:1.72;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:var(--real);text-decoration:none}
+a:hover{color:var(--fake)}
+:focus-visible{outline:2px solid var(--fake);outline-offset:3px;border-radius:1px}
+
+/* ---------- 取证网格纹理 ---------- */
+.grid-tex{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / .035) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / .035) 1px, transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(ellipse 110% 80% at 50% 0%, #000 0%, transparent 78%);
+}
+
+.wrap{width:100%;max-width:var(--maxw);margin-inline:auto;padding-inline:var(--pad);position:relative;z-index:1}
+section{position:relative;z-index:1}
+
+/* ---------- 排印 ---------- */
+h1,h2,h3,h4{font-family:var(--serif);font-weight:600;color:var(--tx-hi);text-wrap:balance;letter-spacing:-.015em;margin:0}
+h2{font-size:clamp(28px,4vw,44px);line-height:1.14}
+h3{font-size:clamp(19px,2.2vw,24px);line-height:1.3}
+p{text-wrap:pretty;margin:0 0 1em}
+.eyebrow{
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--fake);margin:0 0 18px;display:flex;align-items:center;gap:10px;
+}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--fake);flex:none}
+.lede{font-size:clamp(16px,1.5vw,18.5px);color:var(--tx-mid);max-width:70ch}
+.serif-it{font-family:var(--serif);font-style:italic}
+
+/* ---------- 导航 ---------- */
+nav.top{
+  position:sticky;top:0;z-index:50;
+  background:oklch(0.155 0.022 232 / .82);
+  backdrop-filter:blur(14px) saturate(1.3);
+  border-bottom:1px solid oklch(1 0 0 / .09);
+}
+nav.top .bar{display:flex;align-items:center;gap:26px;height:58px;max-width:var(--maxw);margin-inline:auto;padding-inline:var(--pad)}
+.brandmark{display:flex;align-items:baseline;gap:9px;font-family:var(--serif);font-size:17px;color:var(--tx-hi);font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brandmark .v{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--fake);border:1px solid var(--fake-dim);padding:1px 5px;translate:0 -2px}
+nav.top ul{display:flex;gap:4px;list-style:none;margin:0 0 0 auto;padding:0;overflow-x:auto;scrollbar-width:none}
+nav.top ul::-webkit-scrollbar{display:none}
+nav.top a.nv{
+  display:block;padding:9px 13px;font-size:13.5px;color:var(--tx-mid);
+  border-radius:var(--r);white-space:nowrap;transition:color .18s,background .18s;min-height:44px;line-height:26px
+}
+nav.top a.nv:hover{color:var(--tx-hi);background:oklch(1 0 0 / .06)}
+
+/* ---------- 按钮 ---------- */
+.btns{display:flex;flex-wrap:wrap;gap:12px}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;min-height:46px;padding:11px 20px;
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;
+  border:1px solid var(--ink-600);border-radius:var(--r);color:var(--tx);
+  background:oklch(1 0 0 / .03);cursor:pointer;transition:border-color .18s,color .18s,background .18s
+}
+.btn:hover{border-color:var(--real);color:var(--real);background:oklch(0.84 0.105 202 / .07)}
+.btn.solid{border-color:var(--fake);color:var(--ink-900);background:var(--fake);font-weight:600}
+.btn.solid:hover{background:oklch(0.86 0.15 68);border-color:oklch(0.86 0.15 68);color:var(--ink-900)}
+.btn .k{font-size:14px;line-height:1}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{padding:clamp(56px,9vw,108px) 0 clamp(40px,6vw,72px);overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);gap:clamp(28px,5vw,60px);align-items:center}
+.hero h1{font-size:clamp(38px,6.6vw,78px);line-height:1.0;letter-spacing:-.032em;margin-bottom:20px}
+.hero h1 .num{
+  font-family:var(--sans);font-weight:800;letter-spacing:-.05em;
+  background:linear-gradient(104deg,var(--real) 8%,var(--fake) 92%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero .sub{font-family:var(--serif);font-size:clamp(17px,2vw,22px);color:var(--tx-mid);line-height:1.5;margin-bottom:26px;font-style:italic}
+.meta-line{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--mono);font-size:12px;color:var(--tx-low);margin:26px 0 30px;letter-spacing:.04em}
+.meta-line span{display:flex;align-items:center;gap:7px}
+.meta-line i{font-style:normal;color:var(--real);font-size:9px}
+
+/* 潮汐动画 */
+.tide{position:relative;border:1px solid oklch(1 0 0 / .11);border-radius:var(--r);background:linear-gradient(180deg,var(--ink-850),var(--ink-900));padding:0;overflow:hidden}
+.tide img{display:block;width:100%;height:auto}
+
+/* ============================================================
+   数字带
+   ============================================================ */
+.stats{border-block:1px solid oklch(1 0 0 / .1);background:oklch(1 0 0 / .022)}
+.stats .row{display:grid;grid-template-columns:repeat(5,1fr)}
+.stat{padding:clamp(20px,3vw,30px) clamp(12px,1.4vw,20px);border-right:1px solid oklch(1 0 0 / .08);border-bottom:1px solid oklch(1 0 0 / .08)}
+.stat:nth-child(5n){border-right:0}
+.stat:nth-last-child(-n+5){border-bottom:0}
+.stat .n{font-family:var(--serif);font-size:clamp(26px,3.4vw,40px);line-height:1;color:var(--tx-hi);letter-spacing:-.03em;font-weight:600}
+.stat .n em{font-style:normal;font-size:.5em;color:var(--fake);margin-left:2px;font-family:var(--mono);letter-spacing:0}
+.stat .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-low);margin-top:12px;line-height:1.7;overflow-wrap:break-word}
+
+/* ============================================================
+   浅底章节通用
+   ============================================================ */
+.light{background:var(--paper);color:var(--ink-on-paper);padding:clamp(64px,9vw,110px) 0}
+.light h2,.light h3{color:oklch(0.19 0.02 232)}
+.light .lede{color:oklch(0.42 0.02 232)}
+.light .eyebrow{color:oklch(0.5 0.12 60)}
+.light .eyebrow::before{background:oklch(0.5 0.12 60)}
+.dark-sec{padding:clamp(64px,9vw,110px) 0}
+
+/* 白底配图：宽度与章节内 .wrap 图位对齐（非整页宽） */
+.whitefig{position:relative;z-index:1;width:100%;margin:clamp(28px,4vw,52px) 0 0}
+.wf-box{
+  background:#fff;border:1px solid oklch(0 0 0 / .10);border-radius:var(--r);
+  padding:28px; /* 与 .fig 占位图块完全一致：1px 边框 + 28px 内边距 → 图片可用宽度与 Fig.1 图位严格对齐 */
+  box-shadow:0 18px 44px oklch(0 0 0 / .28)
+}
+.wf-box img{display:block;width:100%;height:auto;border-radius:2px}
+/* 标题字号/字体/字距完全继承全站 figcaption，仅覆写颜色（白底）与间距 */
+.whitefig .wf-cap{
+  background:#fff;color:oklch(0.43 0.02 232);
+  margin:12px 0 0;padding:0;text-align:left
+}
+@media (max-width:760px){ .wf-box{padding:14px} }
+
+/* 图片淡入 */
+.fade-img{opacity:0;transition:opacity 1.1s ease;animation:imgFadeFallback .9s ease 3s forwards}
+.fade-img.loaded,.fade-img.is-shown{opacity:1}
+@keyframes imgFadeFallback{to{opacity:1}}
+
+.sec-head{margin-bottom:clamp(34px,4.5vw,56px);max-width:78ch}
+
+/* ============================================================
+   2×2 覆盖矩阵
+   ============================================================ */
+.matrix-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:clamp(28px,4.5vw,56px);align-items:start}
+.matrix{position:relative}
+.mx-grid{display:grid;grid-template-columns:96px 1fr 1fr;gap:10px}
+.mx-axis-y,.mx-axis-x{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-low);display:flex;align-items:center;justify-content:center;text-align:center}
+.mx-axis-y{writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.2em}
+.cell{
+  position:relative;min-height:148px;padding:18px;border:1px solid oklch(1 0 0 / .12);
+  background:oklch(1 0 0 / .028);border-radius:var(--r);cursor:pointer;text-align:left;
+  transition:border-color .2s,background .2s,transform .2s;font:inherit;color:inherit;
+  display:flex;flex-direction:column;gap:8px;overflow:hidden
+}
+.cell::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 88% 12%, oklch(0.84 0.105 202 / .16), transparent 62%);opacity:0;transition:opacity .25s;pointer-events:none}
+.cell:hover{border-color:var(--real);transform:translateY(-2px)}
+.cell:hover::after{opacity:1}
+.cell[aria-pressed="true"]{border-color:var(--fake);background:oklch(0.79 0.145 68 / .08)}
+.cell[aria-pressed="true"]::after{opacity:1;background:radial-gradient(circle at 88% 12%, oklch(0.79 0.145 68 / .2), transparent 62%)}
+.cell .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--real)}
+.cell[aria-pressed="true"] .tag{color:var(--fake)}
+.cell .ttl{font-family:var(--serif);font-size:18.5px;color:var(--tx-hi);line-height:1.28;letter-spacing:-.01em}
+.cell .bm{font-family:var(--mono);font-size:12px;color:var(--tx-low);margin-top:auto;letter-spacing:.03em}
+.cell .v1{display:inline-flex;gap:8px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--tx-low)}
+.dot-n{width:6px;height:6px;border-radius:50%;background:var(--ink-600);flex:none}
+.dot-y{width:6px;height:6px;border-radius:50%;background:var(--fake);flex:none}
+
+.mx-detail{border:1px solid oklch(1 0 0 / .12);border-radius:var(--r);background:oklch(1 0 0 / .03);padding:clamp(20px,2.6vw,30px);position:sticky;top:82px}
+.mx-detail h3{margin-bottom:6px}
+.mx-detail .dom{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fake);margin-bottom:14px}
+.mx-detail ul{margin:14px 0 0;padding-left:18px;font-size:14.5px;color:var(--tx-mid)}
+.mx-detail li{margin-bottom:7px}
+.mx-detail li b{color:var(--tx);font-weight:600}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-family:var(--mono);font-size:12px;margin-top:18px;border-top:1px solid oklch(1 0 0 / .1);padding-top:16px}
+.kv dt{color:var(--tx-low);letter-spacing:.05em}
+.kv dd{margin:0;color:var(--real);text-align:right}
+
+/* ============================================================
+   方法论卡片
+   ============================================================ */
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:oklch(0 0 0 / .12);border:1px solid oklch(0 0 0 / .12);border-radius:var(--r);overflow:hidden}
+.pillar{background:var(--paper);padding:clamp(24px,3vw,34px);display:flex;flex-direction:column;gap:14px}
+.pillar .idx{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:oklch(0.5 0.12 60)}
+.pillar h3{font-size:22px}
+.pillar p{font-size:14.8px;color:oklch(0.4 0.02 232);margin:0}
+.pillar .formula{
+  font-family:var(--mono);font-size:12.5px;color:oklch(0.24 0.02 232);
+  background:oklch(0 0 0 / .05);border-left:2px solid oklch(0.5 0.12 60);
+  padding:10px 13px;margin-top:auto;line-height:1.7;overflow-x:auto
+}
+
+/* ---------- 占位图块（等论文原图替换） ---------- */
+.fig{
+  position:relative;border:1px dashed oklch(0 0 0 / .28);border-radius:var(--r);
+  background:
+    repeating-linear-gradient(45deg, oklch(0 0 0 / .028) 0 8px, transparent 8px 16px),
+    oklch(0.955 0.007 232);
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:28px;min-height:200px;color:oklch(0.42 0.02 232)
+}
+.fig img{width:100%;height:100%;object-fit:contain;border-radius:2px}
+.fig .ph{max-width:46ch}
+.fig .ph b{display:block;font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:oklch(0.5 0.12 60);margin-bottom:9px}
+.fig .ph span{font-size:14px;line-height:1.62;color:oklch(0.40 0.02 232)}
+.fig .ph code{font-family:var(--mono);font-size:12px;color:oklch(0.24 0.02 232);background:oklch(0 0 0 / .06);padding:1px 5px;border-radius:2px}
+.on-dark .fig{border-color:oklch(1 0 0 / .25);background:repeating-linear-gradient(45deg, oklch(1 0 0 / .03) 0 8px, transparent 8px 16px),oklch(0.19 0.024 232);color:var(--tx-mid)}
+.on-dark .fig .ph b{color:var(--fake)}
+.on-dark .fig .ph span{color:var(--tx-mid)}
+.on-dark .fig .ph code{color:var(--tx);background:oklch(1 0 0 / .08)}
+
+/* --- Fig.3 · 双图并排（model.png + shanon.png），等尺寸、保持长宽比 --- */
+.fig.duofig{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:clamp(14px,2vw,28px);align-items:center;
+  border-style:solid;border-color:oklch(0 0 0 / .10);
+  background:#fff;
+  padding:clamp(16px,2.2vw,28px);min-height:0
+}
+.fig.duofig img{
+  display:block;width:100%;height:auto;
+  /* 两图强制同尺寸容器（取 model.png 原始比例 1327:575），内容按比例 contain 不裁切不变形 */
+  aspect-ratio:1327 / 575;object-fit:contain;object-position:center;
+  background:#fff;border-radius:2px
+}
+@media (max-width:760px){
+  .fig.duofig{grid-template-columns:1fr}
+}
+
+figcaption{font-family:var(--mono);font-size:12.5px;letter-spacing:.05em;color:oklch(0.43 0.02 232);margin-top:12px;line-height:1.65}
+.on-dark figcaption,.dark-sec figcaption{color:var(--tx-low)}
+
+/* --- Fig.6 · GIF 样例矩阵（4 行 × 3 列）--- */
+.fig.giffig{
+  display:block;padding:clamp(16px,2.2vw,26px);min-height:0;
+  border-style:solid;border-color:oklch(1 0 0 / .16);
+  background:linear-gradient(180deg,oklch(1 0 0 / .045),oklch(1 0 0 / .012)),oklch(0.185 0.024 232)
+}
+.giffig-hd{margin-bottom:clamp(12px,1.5vw,18px)}
+.giffig-hd b{display:block;font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--fake);margin-bottom:8px}
+.giffig-hd > span{display:block;max-width:72ch;font-size:13.4px;line-height:1.62;color:var(--tx-mid)}
+
+.gifmatrix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(5px,.75vw,10px);align-items:stretch}
+.gifcell{
+  position:relative;overflow:hidden;border-radius:3px;
+  border:1px solid oklch(1 0 0 / .14);background:oklch(1 0 0 / .045);
+  transition:border-color .3s ease,transform .3s cubic-bezier(.2,.8,.2,1)
+}
+.gifcell.sq{aspect-ratio:1/1}
+.gifcell.wide{aspect-ratio:2/1}
+.gifcell img{display:block;width:100%;height:100%;object-fit:cover}
+.gifcell:hover{border-color:var(--real-dim);transform:translateY(-2px)}
+.gifcell .miss{
+  position:absolute;inset:0;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--tx-low);text-align:center;padding:8px
+}
+.gifcell .miss i{font-style:normal;font-size:15px;color:var(--fake-dim)}
+
+@media (max-width:760px){
+  .gifmatrix{gap:5px}
+}
+
+/* --- Capability Boundary · Real / Fake 双轨恒速轮播 --- */
+.mx-note{
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--tx-low);margin:14px 0 0;display:flex;align-items:center;gap:9px
+}
+.mx-note::before{content:"";flex:none;width:22px;height:1px;background:var(--fake-dim)}
+
+.fig.demofig{
+  display:flex;flex-direction:column;gap:0;padding:0;min-height:280px;
+  width:100%;min-width:0;max-width:100%;overflow:hidden;
+  border-style:solid;border-color:oklch(1 0 0 / .16);
+  background:linear-gradient(180deg,oklch(1 0 0 / .045),oklch(1 0 0 / .012)),oklch(0.185 0.024 232)
+}
+.dm-hd{
+  flex:none;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;
+  padding:13px clamp(14px,2vw,22px);border-bottom:1px solid oklch(1 0 0 / .10)
+}
+.dm-hd b{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--tx-mid);font-weight:500}
+.dm-hd b i{font-style:normal;color:var(--fake)}
+.dm-hd .lgd{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11.2px;letter-spacing:.1em;color:var(--tx-low)}
+.dm-hd .lgd em{display:inline-flex;align-items:center;gap:6px;font-style:normal}
+.dm-hd .sw{width:11px;height:11px;border-radius:2px;background:oklch(1 0 0 / .05)}
+.dm-hd .sw.real{box-shadow:0 0 0 1px var(--real-dim),0 0 9px 1px oklch(0.84 0.105 202 / .75)}
+.dm-hd .sw.fake{box-shadow:0 0 0 1px var(--fake-dim),0 0 9px 1px oklch(0.79 0.145 68 / .75)}
+.dm-hd .hintpause{color:var(--tx-low);opacity:.8}
+
+/* 头部 ≈52px + 本体 228px = 280px，与原「素材位」min-height 严格一致 */
+.dm-body{flex:none;height:clamp(178px,24vw,228px);display:flex;flex-direction:column;width:100%;min-width:0;max-width:100%;overflow:hidden}
+.dm-row{
+  position:relative;flex:1 1 0;min-height:0;min-width:0;width:100%;overflow:hidden;
+  display:flex;align-items:center;
+  /* 顶部 25px = 标签 top(3px) + 标签高(≈20px) + 2px 间隙 → 标签不压图 */
+  padding:25px clamp(14px,2vw,22px) 9px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 0,#000 6%,#000 94%,transparent 100%)
+}
+.dm-row + .dm-row{border-top:1px solid oklch(1 0 0 / .07)}
+.dm-row .dm-tag{
+  position:absolute;left:clamp(10px,1.6vw,18px);top:3px;z-index:3;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  padding:1px 7px;border-radius:2px;pointer-events:none;white-space:nowrap
+}
+.dm-row[data-kind=real] .dm-tag{color:var(--real);background:oklch(0.84 0.105 202 / .12);box-shadow:inset 0 0 0 1px oklch(0.84 0.105 202 / .35)}
+.dm-row[data-kind=fake] .dm-tag{color:var(--fake);background:oklch(0.79 0.145 68 / .12);box-shadow:inset 0 0 0 1px oklch(0.79 0.145 68 / .35)}
+
+.dm-track{
+  display:flex;align-items:center;gap:0;
+  width:max-content;height:100%;
+  will-change:transform;
+  animation:dm-marquee 40s linear infinite;animation-play-state:running
+}
+.dm-seg{display:flex;align-items:center;height:100%}
+.dm-row[data-kind=fake] .dm-track{animation-direction:reverse}
+.fig.demofig:hover .dm-track,.fig.demofig:focus-within .dm-track{animation-play-state:paused}
+.fig.demofig.dm-tap-paused .dm-track{animation-play-state:paused}
+/* --loop = 1/k（k 为分段复制份数）：位移恰好一个分段宽 → 视觉无缝 */
+@keyframes dm-marquee{from{transform:translate3d(0,0,0)}to{transform:translate3d(calc(-100% * var(--loop,.5)),0,0)}}
+
+.dm-item{
+  position:relative;flex:none;
+  height:100%;width:auto;aspect-ratio:4/3;   /* 由行高决定尺寸，保持 4:3 不留黑边 */
+  margin-right:clamp(12px,1.6vw,20px);
+  padding:4px;border-radius:3px;background:oklch(0.14 0.02 232);overflow:hidden;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1)
+}
+.dm-row[data-kind=real] .dm-item{box-shadow:0 0 0 1px oklch(0.84 0.105 202 / .45),0 0 16px 1px oklch(0.84 0.105 202 / .30),inset 0 0 22px oklch(0.84 0.105 202 / .10)}
+.dm-row[data-kind=fake] .dm-item{box-shadow:0 0 0 1px oklch(0.79 0.145 68 / .45),0 0 16px 1px oklch(0.79 0.145 68 / .30),inset 0 0 22px oklch(0.79 0.145 68 / .10)}
+.dm-item::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:2px}
+.dm-row[data-kind=real] .dm-item::after{box-shadow:inset 0 0 26px oklch(0.84 0.105 202 / .28)}
+.dm-row[data-kind=fake] .dm-item::after{box-shadow:inset 0 0 26px oklch(0.79 0.145 68 / .28)}
+.dm-item:hover{transform:scale(1.06)}
+.dm-item img{display:block;width:100%;height:100%;object-fit:contain;border-radius:2px;background:oklch(0.11 0.018 232);opacity:0;transition:opacity .5s ease}
+.dm-item img.ok{opacity:1}
+.dm-item .dm-miss{
+  position:absolute;inset:4px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--tx-low);
+  background:repeating-linear-gradient(45deg,oklch(1 0 0 / .04) 0 6px,transparent 6px 12px);border-radius:2px
+}
+.dm-empty{
+  flex:1 1 auto;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;
+  padding:24px;text-align:center;font-size:13.2px;line-height:1.7;color:var(--tx-mid)
+}
+.dm-empty b{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fake)}
+.dm-empty code{font-family:var(--mono);font-size:11.6px;color:var(--tx);background:oklch(1 0 0 / .08);padding:1px 5px;border-radius:2px}
+
+/* ============================================================
+   交互组件
+   ============================================================ */
+.lab{border:1px solid oklch(1 0 0 / .13);border-radius:var(--r);background:linear-gradient(180deg,oklch(1 0 0 / .045),oklch(1 0 0 / .015));padding:clamp(22px,3vw,34px)}
+.lab-hd{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.lab-hd h3{font-size:clamp(19px,2.3vw,25px)}
+.lab-hd .hint{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-low)}
+.lab p.desc{font-size:14.8px;color:var(--tx-mid);max-width:74ch;margin-bottom:24px}
+
+.ctrl{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.ctrl label{font-family:var(--mono);font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-low);flex:none}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;flex:1;min-width:180px;height:34px;background:transparent;cursor:pointer;margin:0
+}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--ink-700);border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:var(--ink-700);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--fake);
+  border:2px solid var(--ink-900);margin-top:-7.5px;box-shadow:0 0 0 1px var(--fake-dim);transition:transform .15s
+}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--fake);border:2px solid var(--ink-900);box-shadow:0 0 0 1px var(--fake-dim)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.16)}
+.readout{font-family:var(--mono);font-size:15px;color:var(--real);min-width:74px;text-align:right;letter-spacing:.02em}
+
+/* Tide 相位 */
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:oklch(1 0 0 / .1);border:1px solid oklch(1 0 0 / .1);border-radius:var(--r);overflow:hidden;margin-bottom:24px}
+.ph{background:var(--ink-850);padding:16px 18px;transition:background .3s,color .3s;position:relative}
+.ph .nm{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-low);transition:color .3s}
+.ph .ds{font-family:var(--serif);font-size:17.5px;color:var(--tx-mid);margin-top:7px;transition:color .3s}
+.ph .tr{font-size:13px;color:var(--tx-low);margin-top:8px;line-height:1.55;transition:color .3s}
+.ph.on{background:oklch(0.79 0.145 68 / .13)}
+.ph.on .nm{color:var(--fake)}
+.ph.on .ds{color:var(--tx-hi)}
+.ph.on .tr{color:var(--tx)}
+.ph .bar{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--fake);transition:width .45s ease}
+.ph.on .bar{width:100%}
+
+/* 熵路由 */
+.route{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+.mod{border:1px solid oklch(1 0 0 / .14);border-radius:var(--r);padding:18px;background:oklch(1 0 0 / .025);transition:border-color .25s,background .25s}
+.mod .mh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+.mod .mn{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-mid)}
+.mod .mv{font-family:var(--serif);font-size:30px;color:var(--tx-hi);letter-spacing:-.02em;line-height:1}
+.mod .ml{font-size:13px;color:var(--tx-low);margin-top:10px;line-height:1.6}
+.entr{height:6px;background:var(--ink-800);border-radius:3px;overflow:hidden;margin-top:14px}
+.entr i{display:block;height:100%;background:var(--real);transition:width .3s ease,background .3s}
+.mod.win{border-color:var(--real);background:oklch(0.84 0.105 202 / .09)}
+.mod.win .mn{color:var(--real)}
+.mod.win .entr i{background:var(--real)}
+.mod.lose{opacity:.62}
+.verdict{
+  display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+  border-top:1px solid oklch(1 0 0 / .1);padding-top:18px
+}
+.verdict .v{font-family:var(--serif);font-size:clamp(18px,2.4vw,25px);color:var(--tx-hi)}
+.verdict .v b{color:var(--real);font-weight:600}
+.verdict .why{font-family:var(--mono);font-size:12.5px;color:var(--tx-low);letter-spacing:.05em;max-width:46ch;line-height:1.7}
+
+/* τ(p) 校准 */
+.calib{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(22px,3.4vw,40px);align-items:center}
+.tau-scale{position:relative;height:210px;border:1px solid oklch(1 0 0 / .12);border-radius:var(--r);background:linear-gradient(180deg,oklch(0.79 0.145 68 / .09),oklch(0.84 0.105 202 / .09));overflow:hidden}
+.tau-scale .ln{position:absolute;left:0;right:0;height:1px;background:oklch(1 0 0 / .1)}
+.tau-scale .lb{position:absolute;left:9px;font-family:var(--mono);font-size:12px;color:var(--tx-low);letter-spacing:.08em}
+#tauLine{position:absolute;left:0;right:0;height:2px;background:var(--fake);transition:top .18s ease-out;box-shadow:0 0 12px oklch(0.79 0.145 68 / .6)}
+#tauTag{position:absolute;right:9px;font-family:var(--mono);font-size:12.5px;color:var(--ink-900);background:var(--fake);padding:2px 7px;border-radius:2px;transform:translateY(-50%);transition:top .18s ease-out;font-weight:600}
+.zone{position:absolute;left:0;right:0;transition:all .18s ease-out}
+.zone.acc{bottom:0;background:repeating-linear-gradient(45deg,oklch(0.84 0.105 202 / .2) 0 6px,transparent 6px 12px)}
+.zone.rej{top:0;background:oklch(0 0 0 / .28)}
+.zone-lb{position:absolute;left:9px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.calib-out{display:flex;flex-direction:column;gap:14px}
+.co{border:1px solid oklch(1 0 0 / .12);border-radius:var(--r);padding:14px 16px;background:oklch(1 0 0 / .028)}
+.co .k{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-low)}
+.co .v{font-family:var(--serif);font-size:19px;color:var(--tx-hi);margin-top:5px;line-height:1.4}
+.co .v em{font-style:normal;color:var(--fake)}
+.co .v i{font-style:normal;color:var(--real)}
+
+/* ============================================================
+   性能图表（手写 SVG/CSS，离线可用）
+   ============================================================ */
+.chart-shell{border:1px solid oklch(0 0 0 / .14);border-radius:var(--r);background:oklch(0 0 0 / .022);padding:clamp(20px,2.8vw,30px)}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:22px;font-family:var(--mono);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:oklch(0.40 0.02 232)}
+.legend i{width:11px;height:11px;display:inline-block;margin-right:7px;translate:0 1px;border-radius:1px}
+.bars{display:flex;flex-direction:column;gap:14px}
+.brow{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:16px;align-items:center}
+.brow .bn{font-size:13.5px;color:oklch(0.3 0.02 232);line-height:1.4;text-align:right}
+.brow .bn small{display:block;font-family:var(--mono);font-size:12px;color:oklch(0.43 0.02 232);letter-spacing:.06em}
+.btrack{position:relative;height:44px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.bfill{height:11px;border-radius:1px;position:relative;transform-origin:left;animation:grow .9s cubic-bezier(.2,.8,.2,1) both}
+.bfill.sota{background:linear-gradient(90deg,oklch(0.62 0.12 55),oklch(0.7 0.15 55))}
+.bfill.v1{background:oklch(0.72 0.02 232)}
+.bfill.v2{background:linear-gradient(90deg,var(--real-dim),oklch(0.72 0.13 202))}
+.bfill span{position:absolute;right:-4px;top:50%;transform:translate(100%,-50%);font-family:var(--mono);font-size:12px;color:oklch(0.3 0.02 232);white-space:nowrap}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+.dom-table{width:100%;border-collapse:collapse;font-size:14px}
+.dom-table caption{text-align:left;font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:oklch(0.5 0.12 60);padding-bottom:14px}
+.dom-table th,.dom-table td{padding:11px 12px;text-align:right;border-bottom:1px solid oklch(0 0 0 / .1)}
+.dom-table th:first-child,.dom-table td:first-child{text-align:left}
+.dom-table thead th{font-family:var(--mono);font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:oklch(0.46 0.02 232);font-weight:500;border-bottom:1px solid oklch(0 0 0 / .22)}
+.dom-table tbody tr:hover{background:oklch(0 0 0 / .03)}
+.dom-table td.ours{color:oklch(0.36 0.09 200);font-weight:700;font-family:var(--mono)}
+.dom-table td.dim{color:oklch(0.42 0.015 232);font-family:var(--mono)}
+.dom-table .rk{font-family:var(--mono);font-size:12px;color:oklch(0.5 0.12 60);letter-spacing:.08em}
+
+/* ============================================================
+   RRVBench
+   ============================================================ */
+.rrv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,4.5vw,56px);align-items:start}
+.gen-list{display:flex;flex-direction:column;gap:1px;background:oklch(1 0 0 / .1);border:1px solid oklch(1 0 0 / .1);border-radius:var(--r);overflow:hidden}
+.gen{background:var(--ink-850);padding:14px 18px;display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center}
+.gen .gn{font-size:14.5px;color:var(--tx)}
+.gen .gn small{display:block;font-family:var(--mono);font-size:12px;color:oklch(0.66 0.016 232);letter-spacing:.08em;margin-top:3px}
+.gen .cnt{font-family:var(--mono);font-size:12.5px;color:var(--tx-mid)}
+.gen .tp{font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase;padding:3px 8px;border-radius:2px}
+.tp.c{color:var(--fake);border:1px solid var(--fake-dim)}
+.tp.o{color:var(--real);border:1px solid var(--real-dim)}
+
+/* ============================================================
+   资源 / BibTeX
+   ============================================================ */
+.res{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;background:oklch(0 0 0 / .12);border:1px solid oklch(0 0 0 / .12);border-radius:var(--r);overflow:hidden}
+.rcard{background:var(--paper);padding:26px;display:flex;flex-direction:column;gap:10px;min-height:158px}
+.rcard .ic{font-family:var(--mono);font-size:17px;color:oklch(0.5 0.12 60);line-height:1}
+.rcard h3{font-size:19px}
+.rcard p{font-size:14px;color:oklch(0.40 0.02 232);margin:0}
+.rcard a.go{margin-top:auto;font-family:var(--mono);font-size:12.5px;letter-spacing:.11em;text-transform:uppercase;color:oklch(0.36 0.09 200);display:inline-flex;align-items:center;gap:7px;min-height:44px}
+.rcard a.go:hover{color:oklch(0.5 0.12 60)}
+
+pre.bib{
+  background:oklch(0.13 0.02 232);border:1px solid oklch(1 0 0 / .12);border-radius:var(--r);
+  padding:22px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.85;
+  color:var(--tx-mid);margin:0;tab-size:2
+}
+pre.bib .k{color:var(--fake)}
+pre.bib .s{color:var(--real)}
+.copy-row{display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+
+/* 素材清单 */
+.assets-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:oklch(1 0 0 / .1);border:1px solid oklch(1 0 0 / .1);border-radius:var(--r);overflow:hidden}
+.ai{background:var(--ink-850);padding:20px 22px}
+.ai .t{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fake);margin-bottom:8px}
+.ai .d{font-family:var(--serif);font-size:17px;color:var(--tx-hi);margin-bottom:7px;line-height:1.35}
+.ai .s{font-size:14px;color:var(--tx-mid);line-height:1.65}
+.ai .s code{font-family:var(--mono);font-size:12.5px;color:var(--real);background:oklch(1 0 0 / .06);padding:1px 5px;border-radius:2px}
+.pri{display:inline-block;font-family:var(--mono);font-size:12px;letter-spacing:.12em;padding:2px 6px;border-radius:2px;margin-left:8px;translate:0 -2px}
+.pri.hi{color:var(--ink-900);background:var(--fake)}
+.pri.mid{color:var(--real);border:1px solid var(--real-dim)}
+
+footer{border-top:1px solid oklch(1 0 0 / .1);padding:44px 0 56px;background:oklch(0.13 0.02 232)}
+.foot{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:flex-start}
+.foot p{font-family:var(--mono);font-size:12.5px;color:var(--tx-low);letter-spacing:.05em;margin:0;line-height:1.9}
+
+/* ---------- 滚动揭示 ---------- */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
+.rv.in{opacity:1;transform:none}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:980px){
+  .hero-grid,.matrix-wrap,.rrv,.calib{grid-template-columns:1fr}
+  .pillars{grid-template-columns:1fr}
+  .stats .row{grid-template-columns:repeat(2,1fr)}
+  .stat{border-bottom:1px solid oklch(1 0 0 / .08)}
+  .stat:nth-child(5n){border-right:1px solid oklch(1 0 0 / .08)}
+  .stat:nth-last-child(-n+5){border-bottom:1px solid oklch(1 0 0 / .08)}
+  .stat:nth-child(2n){border-right:0}
+  .stat:nth-last-child(-n+2){border-bottom:0}
+  .mx-detail{position:static}
+  .phases{grid-template-columns:1fr}
+}
+@media (max-width:620px){
+  .route{grid-template-columns:1fr}
+  .mx-grid{grid-template-columns:1fr;gap:8px}
+  .mx-axis-y,.mx-axis-x{display:none}
+  .cell{min-height:128px;padding:14px}
+  .brow{grid-template-columns:1fr;gap:6px}
+  .brow .bn{text-align:left}
+  .stats .row{grid-template-columns:1fr}
+  .stat{border-right:0}
+  .stat:nth-child(5n){border-right:0}
+  .stat:nth-last-child(-n+2){border-bottom:1px solid oklch(1 0 0 / .08)}
+  .stat:last-child{border-bottom:0}
+  nav.top .brandmark{font-size:15px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .rv{opacity:1;transform:none}
+  .fade-img{opacity:1;transition:none}
+}
+</style>
+</head>
+<body>
+<div class="grid-tex" aria-hidden="true"></div>
+
+<nav class="top">
+  <div class="bar">
+    <span class="brandmark">Venus<span style="color:var(--tx-low)">·</span>DeFakerOne2 <span class="v">V2</span></span>
+    <ul>
+      <li><a class="nv" href="#coverage">Coverage</a></li>
+      <li><a class="nv" href="#method">Method</a></li>
+      <li><a class="nv" href="#interactive">Interactive</a></li>
+      <li><a class="nv" href="#results">Results</a></li>
+      <li><a class="nv" href="#rrvbench">RRVBench</a></li>
+      <li><a class="nv" href="#resources">Resources</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">GuangJian Team · Ant Group · Technical Report</p>
+      <h1>Venus&#8209;<br>DeFakerOne<span class="num">2</span></h1>
+      <p class="sub">A Vision-Forensics Foundation Model<br>with Broader Coverage</p>
+      <p class="lede">真实世界的伪造是异质的：它既以数字篡改的形式出现，也以物理翻拍/面具攻击的形式出现；既由图像承载，也由视频承载。DeFakerOne2 用<b style="color:var(--tx-hi);font-weight:600">一套 2B 参数</b>同时覆盖 {digital, physical} × {image, video} 的完整矩阵，在 8 个领域全部排名第一。</p>
+      <div class="meta-line">
+        <span><i>◆</i>2026-09-01</span>
+        <span><i>◆</i>Qwen3.5-2B backbone</span>
+        <span><i>◆</i>~50M training samples</span>
+        <span><i>◆</i>53 detection + 14 localization benchmarks</span>
+      </div>
+      <div class="btns">
+        <a class="btn solid" href="#resources"><span class="k">↓</span> Paper</a>
+        <a class="btn" href="https://github.com/venus-guangjian/Venus-DeFakerOne2" target="_blank" rel="noopener"><span class="k">⌥</span> Code</a>
+        <a class="btn" href="#rrvbench"><span class="k">▶</span> RRVBench</a>
+        <a class="btn" href="#method"><span class="k">◇</span> Method</a>
+      </div>
+    </div>
+
+    <div class="tide rv" aria-label="DefakerOne2 能力覆盖总览图">
+      <img class="fade-img" src="images/teaser.png" alt="DefakerOne2: Stronger &amp; Broader Defense Coverage — 覆盖 {digital, physical} × {image, video} 全矩阵的雷达图">
+    </div>
+  </div>
+</header>
+
+<!-- ========== STATS ========== -->
+<div class="stats">
+  <div class="wrap"><div class="row">
+    <!-- 第一行 -->
+    <div class="stat"><div class="n" data-count="4">0</div><div class="l">All Four Domains<br>Ranked #1</div></div>
+    <div class="stat"><div class="n" data-count="50">0<em>/53</em></div><div class="l">Detection SOTA<br>(DefakerOne Family)</div></div>
+    <div class="stat"><div class="n" data-count="12">0<em>/14</em></div><div class="l">Localization SOTA<br>(DefakerOne Family)</div></div>
+    <div class="stat"><div class="n" data-count="40">0<em>/53</em></div><div class="l">Detection SOTA<br>(DefakerOne2)</div></div>
+    <div class="stat"><div class="n" data-count="11">0<em>/14</em></div><div class="l">Localization SOTA<br>(DefakerOne2)</div></div>
+    <!-- 第二行 -->
+    <div class="stat"><div class="n" data-count="50">0<em>M</em></div><div class="l">Training<br>Samples</div></div>
+    <div class="stat"><div class="n" data-count="10.5" data-dec="1">0</div><div class="l">Points Improvement<br>on Image Domain<br>v.s. DefakerOne</div></div>
+    <div class="stat"><div class="n" data-count="38.1" data-dec="1">0</div><div class="l">Points Improvement<br>on Video Domain<br>v.s. DefakerOne</div></div>
+    <div class="stat"><div class="n" data-count="23.1" data-dec="1">0</div><div class="l">Points Improvement<br>on Latest Image Generators<br>v.s. DefakerOne</div></div>
+    <div class="stat"><div class="n" data-count="47.0" data-dec="1">0</div><div class="l">Points Improvement<br>on Latest Video Generators<br>v.s. DefakerOne</div></div>
+  </div></div>
+</div>
+
+<main>
+
+<!-- ========== HERO FIGURE · Figure 2（与 Fig.1 图位等宽，白底） ========== -->
+<div class="wrap">
+  <figure class="whitefig rv">
+    <div class="wf-box">
+      <img class="fade-img" src="images/figure2.png" alt="Figure 2 — DeFakerOne2 在视觉防伪任务上取得全面领先的性能">
+      <figcaption class="wf-cap">Fig. 1 — DeFakerOne2在视觉防伪任务上取得全面领先的性能</figcaption>
+    </div>
+  </figure>
+</div>
+
+<!-- ========== COVERAGE ========== -->
+<section class="dark-sec" id="coverage">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">01 — Capability Boundary</p>
+      <h2>把碎片化的检测器，收敛成一个基础模型</h2>
+      <p class="lede" style="margin-top:18px">数字图像取证、人脸活体、证件防伪、视频取证——这四个社区长期各自维护 benchmark、假设与模型设计，尽管目标完全相同：区分真实媒体与伪造媒体。点击下方矩阵任一格，查看该象限覆盖的任务与 benchmark。</p>
+    </div>
+
+    <div class="matrix-wrap">
+      <div class="matrix rv">
+        <div class="mx-grid" role="group" aria-label="伪造覆盖矩阵">
+          <div></div>
+          <div class="mx-axis-x">Image</div>
+          <div class="mx-axis-x colhead2">Video</div>
+
+          <div class="mx-axis-y" style="grid-row:span 2">Forgery Form</div>
+
+          <button class="cell" data-cell="di" aria-pressed="true">
+            <span class="tag">Digital × Image</span>
+            <span class="ttl">数字图像伪造</span>
+            <span class="v1"><i class="dot-y"></i>V1 已覆盖</span>
+            <span class="bm">AIGC · DeepFake · 证件篡改 · 自然图拼接</span>
+          </button>
+          <button class="cell" data-cell="dv" aria-pressed="false">
+            <span class="tag">Digital × Video</span>
+            <span class="ttl">数字视频伪造</span>
+            <span class="v1"><i class="dot-n"></i>V1 未覆盖</span>
+            <span class="bm">AIGC 视频 · RABench · RRVBench</span>
+          </button>
+          <button class="cell" data-cell="pi" aria-pressed="false">
+            <span class="tag">Physical × Image</span>
+            <span class="ttl">物理图像攻击</span>
+            <span class="v1"><i class="dot-n"></i>V1 未覆盖</span>
+            <span class="bm">人脸活体 · 证件翻拍/屏幕攻击</span>
+          </button>
+          <button class="cell" data-cell="pv" aria-pressed="false">
+            <span class="tag">Physical × Video</span>
+            <span class="ttl">物理视频攻击</span>
+            <span class="v1"><i class="dot-n"></i>V1 未覆盖</span>
+            <span class="bm">面具/视频重放攻击 · 证件视频翻拍</span>
+          </button>
+        </div>
+        <p class="mx-note" id="mxNote">下方展示了该象限的示例样本</p>
+      </div>
+
+      <aside class="mx-detail rv" id="mxDetail" aria-live="polite">
+        <!-- MX_DETAIL -->
+      </aside>
+    </div>
+
+    <figure class="rv" style="margin:clamp(40px,5vw,64px) 0 0">
+      <div class="fig on-dark demofig" id="demoFig">
+        <div class="dm-hd">
+          <b>Quadrant Samples · <i id="dmQuadrant">Digital × Image</i></b>
+          <div class="lgd">
+            <em><span class="sw real"></span>Real</em>
+            <em><span class="sw fake"></span>Fake</em>
+            <em class="hintpause" id="dmPauseHint">悬停暂停</em>
+          </div>
+        </div>
+        <div class="dm-body">
+          <div class="dm-row" data-kind="real" data-dir="">
+            <span class="dm-tag" id="dmTagReal">Real</span>
+          </div>
+          <div class="dm-row" data-kind="fake" data-dir="">
+            <span class="dm-tag" id="dmTagFake">Fake</span>
+          </div>
+        </div>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<!-- ========== METHOD ========== -->
+<section class="light" id="method">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">02 — Method</p>
+      <h2>三项核心设计</h2>
+      <p class="lede" style="margin-top:18px">在约 5000 万条反伪造语料上训练一个统一模型，面临两个硬问题：<b>训练成本</b>与<b>样本难度极不均衡</b>；以及视频取证中的<b>模态两难</b>。下面三项设计分别回应。</p>
+    </div>
+
+    <figure class="rv" style="margin:0 0 clamp(40px,5vw,60px)">
+      <div class="fig duofig">
+        <img class="fade-img" src="images/model.png" alt="DeFakerOne2 总体框架：Vision Encoder + Anomaly Magnifier → LLM → Pred Mask">
+        <img class="fade-img" src="images/shanon.png" alt="Tide-Style Tuning：LoRA 退潮 → 全参涨潮 → LoRA 再退潮的三阶段训练示意">
+      </div>
+      <figcaption>Fig. 3 — DeFakerOne2 总体框架：单一模型同时输出图像/视频级检测结论与像素级定位掩码。</figcaption>
+    </figure>
+
+    <div class="pillars rv">
+      <article class="pillar">
+        <span class="idx">/ 01</span>
+        <h3>Tide-Style Tuning</h3>
+        <p>像潮汐一样涨落交替的三阶段训练：LoRA 退潮（低成本对齐、保留 Qwen3.5 知识与推理能力）→ 全参涨潮（释放全部参数预算拟合大规模异质语料）→ LoRA 再退潮（低成本继续优化难样本新样本，防止在海量易样本上过拟合）</p>
+        <div class="formula">LoRA(τ₁) → merge → Full(τ₂) → LoRA(τ₃)<br>noise: light → medium → heavy<br>data: initial → full → new/hard</div>
+      </article>
+
+      <article class="pillar">
+        <span class="idx">/ 02</span>
+        <h3>Modality Synergism</h3>
+        <p>在训练侧与推理侧同时使用动态模态。训练时每个视频以「原生视频」与「自适应帧率抽取的单帧图」双模态同时训练。推理时分别以两个模态进行预测，选取预测香农熵最低的模态作为选中模态。</p>
+        <div class="formula">训练: L = L_det(clip) + L_det(frames)<br>共享 backbone，损失独立<br>
+        推理: m* = argmin<sub>m</sub> H<sub>m</sub>,&nbsp; H<sub>m</sub> = −c<sub>m</sub> log c<sub>m</sub> − (1−c<sub>m</sub>) log(1−c<sub>m</sub>)<br>取熵最低香农熵模态的预测作为最终判定</div>
+      </article>
+
+      <article class="pillar">
+        <span class="idx">/ 03</span>
+        <h3>Anomaly Magnifier + Calibration Loop</h3>
+        <p>以 DINOMAC 为编码器强化细粒度线索感知。并用全局判定 p 动态推导像素阈值 τ(p)，让定位决策边界基于全局证据校准。同时减少: 1. 真实图上的过分割假阳和 2. 伪造图上的漏检。</p>
+        <div class="formula">τ(p) = 0.75 − p/2 = ½ + ½(½ − p)<br>M_cal = 𝟙[ M &gt; τ(p) ]</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ========== INTERACTIVE ========== -->
+<section class="dark-sec" id="interactive">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">03 — Interactive</p>
+      <h2>三个可以亲手拨动的机制</h2>
+      <p class="lede" style="margin-top:18px">论文的三处关键设计都做成了可交互演示——拖动滑块，直接看训练相位、模态熵路由与阈值校准环如何工作。</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:clamp(24px,3.4vw,40px)">
+
+      <!-- LAB 1: TIDE -->
+      <div class="lab rv" id="labTide">
+        <div class="lab-hd">
+          <h3>① Tide-Style Tuning · 训练相位</h3>
+          <span class="hint">拖动 → 切换相位</span>
+        </div>
+        <p class="desc">横轴是训练进程。LoRA 与全参微调交替进行：退潮时低成本对齐与正则化，涨潮时释放全部参数容量。注意每阶段配套的<b style="color:var(--tx)">数据构成</b>与<b style="color:var(--tx)">噪声强度</b>如何变化。</p>
+        <div class="phases" id="phases">
+          <div class="ph on" data-ph="0"><div class="nm">Phase 1 · Ebb</div><div class="ds">Adaptation Ebb</div><div class="tr">LoRA 微调通用预训练 Qwen3.5，作为 warm-up 借强先验促泛化。<br><span style="color:var(--real)">数据：Initial Data · 噪声：light</span></div><i class="bar"></i></div>
+          <div class="ph" data-ph="1"><div class="nm">Phase 2 · Flood</div><div class="ds">Full-Parameter Flood</div><div class="tr">LoRA 权重合并入骨干后做全参微调，释放全部参数预算拟合大规模异质伪造语料。<br><span style="color:var(--fake)">数据：Full Data · 噪声：medium</span></div><i class="bar"></i></div>
+          <div class="ph" data-ph="2"><div class="nm">Phase 3 · Ebb</div><div class="ds">Hard-Sample Ebb</div><div class="tr">回到 LoRA，作为正则项把模型导向难样本，防止在海量易样本上过拟合。<br><span style="color:var(--real)">数据：New / Hard Data · 噪声：heavy</span></div><i class="bar"></i></div>
+        </div>
+        <div class="ctrl">
+          <label for="tideRange">Training Stages</label>
+          <input type="range" id="tideRange" min="0" max="100" value="12" aria-describedby="tideOut">
+          <output class="readout" id="tideOut">12%</output>
+        </div>
+      </div>
+
+      <!-- LAB 2: ENTROPY ROUTING -->
+      <div class="lab rv" id="labRoute">
+        <div class="lab-hd">
+          <h3>② Entropy-based Test Adaptation · 模态熵路由</h3>
+          <span class="hint">拖动 → 改变证据分布</span>
+        </div>
+        <p class="desc">哪一模态承载更强证据是<b style="color:var(--tx)">样本相关且先验未知</b>的：有些伪造证据集中在时序与跨帧上下文（闪烁、运动不一致），原生视频模态更优；有些证据集中在单帧纹理，喂视频反而用冗余时序 token 稀释注意力。推理时同时取两种模态的预测，用 Shannon 熵度量确定性，采纳更确定的一方——<b style="color:var(--tx)">无需额外训练，也无需学习路由模块</b>。</p>
+        <div class="route">
+          <div class="mod" id="modVideo">
+            <div class="mh"><span class="mn">Video Modality</span><span class="mv" id="hVideo">0.96</span></div>
+            <div class="entr"><i id="bVideo" style="width:96%"></i></div>
+            <div class="ml">Shannon entropy H(video) · 越低越确定<br><span id="predVideo" style="font-family:var(--mono);font-size:12.5px;color:var(--real)">pred: Fake · p=0.62</span></div>
+          </div>
+          <div class="mod win" id="modFrame">
+            <div class="mh"><span class="mn">Frame Modality</span><span class="mv" id="hFrame">0.59</span></div>
+            <div class="entr"><i id="bFrame" style="width:59%"></i></div>
+            <div class="ml">Shannon entropy H(frames) · 自适应帧率抽取<br><span id="predFrame" style="font-family:var(--mono);font-size:12.5px;color:var(--real)">pred: Fake · p=0.86</span></div>
+          </div>
+        </div>
+        <div class="ctrl" style="margin-bottom:22px">
+          <label for="evRange">Temporal Evidence Share</label>
+          <input type="range" id="evRange" min="0" max="100" value="26" aria-describedby="verdictTxt">
+          <output class="readout" id="evOut">26%</output>
+        </div>
+        <div class="verdict">
+          <div class="v" id="verdictTxt">采纳 <b>Frame</b> 模态预测</div>
+          <div class="why" id="verdictWhy">H(frame)=0.59 &lt; H(video)=0.96 → 帧序列更确定 · 证据集中在单帧纹理（文字/logo 级编辑）</div>
+        </div>
+      </div>
+
+      <!-- LAB 3: CALIBRATION -->
+      <div class="lab rv" id="labCalib">
+        <div class="lab-hd">
+          <h3>③ Calibration Loop · τ(p) 动态阈值</h3>
+          <span class="hint">拖动 → 改变全局判定 p</span>
+        </div>
+        <p class="desc">只用区域级监督训练的像素解码器对所有输入一视同仁，容易把真实图上「显著但无害」的区域（纹理边界、强边缘、压缩痕迹）误判为篡改。校准环把定位决策边界<b style="color:var(--tx)">条件化于全局判定 p</b>：p→1 时阈值降到 0.25，弱但真实的篡改线索不再被压制；p→0 时阈值升到 0.75，只有极显著异常才能通过。p=0.5 时退化为传统固定阈值——校准从不注入全局证据不支持的偏置。</p>
+        <div class="calib">
+          <div>
+            <div class="ctrl" style="margin-bottom:18px">
+              <label for="pRange">Global p</label>
+              <input type="range" id="pRange" min="0" max="100" value="88" aria-describedby="tauRead">
+              <output class="readout" id="pOut">0.88</output>
+            </div>
+            <div class="tau-scale" id="tauScale">
+              <div class="zone rej" id="zoneRej" style="height:31%"><span class="zone-lb" style="top:9px;color:var(--tx-low)">Rejected · M ≤ τ(p)</span></div>
+              <div class="zone acc" id="zoneAcc" style="height:69%"><span class="zone-lb" style="bottom:9px;color:var(--real)">Admissible · M &gt; τ(p)</span></div>
+              <div class="ln" style="top:25%"></div><div class="lb" style="top:calc(25% - 7px)">0.75</div>
+              <div class="ln" style="top:50%"></div><div class="lb" style="top:calc(50% - 7px)">0.50</div>
+              <div class="ln" style="top:75%"></div><div class="lb" style="top:calc(75% - 7px)">0.25</div>
+              <div id="tauLine" style="top:31%"></div>
+              <div id="tauTag" style="top:31%">τ = 0.31</div>
+            </div>
+          </div>
+          <div class="calib-out">
+            <div class="co"><div class="k">Decision Boundary τ(p)</div><div class="v" id="tauRead">τ = <em>0.310</em> · 由 p = <i>0.88</i> 推导</div></div>
+            <div class="co"><div class="k">Segmentation Policy</div><div class="v" id="policyRead">宽松：弱篡改线索被保留，<i>召回优先</i></div></div>
+            <div class="co"><div class="k">Calibrated Mask</div><div class="v" style="font-family:var(--mono);font-size:14px">M<sub>cal</sub> = 𝟙[ M &gt; <em id="tauMini">0.310</em> ]</div></div>
+            <div class="co"><div class="k">Region Score → Final Decision</div><div class="v" id="finalRead">Fake · conf <em>0.9786</em></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========== RESULTS ========== -->
+<section class="light" id="results">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">04 — Results</p>
+      <h2>40/53 检测 SOTA，11/14 定位 SOTA</h2>
+      <p class="lede" style="margin-top:18px">单一 2B 参数模型，在八个领域上全部排名第一。且<b>从未在任一专家的主场上被该专家击败</b>，跨域分差极窄——没有任何领域为这份通用性付出代价。</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:clamp(24px,3.4vw,40px)">
+
+      <div class="chart-shell rv">
+        <div style="text-align:left;font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:oklch(0.5 0.19 27);padding-bottom:14px">Table — 相比 领域专家 (SOTA)DefakerOne (V1) 在关键领域上的提升对比</div>
+        <div class="legend">
+          <span><i style="background:oklch(0.68 0.15 55)"></i>领域专家 (SOTA)</span>
+          <span><i style="background:oklch(0.72 0.02 232)"></i>DeFakerOne (V1)</span>
+          <span><i style="background:oklch(0.72 0.13 200)"></i>DeFakerOne2 (Ours V2)</span>
+          <span style="color:oklch(0.43 0.015 232)">metric: 按领域平均 · 每组自上而下为 领域专家 (SOTA) / DeFakerOne (V1) / DeFakerOne2 (Ours V2)</span>
+        </div>
+        <div class="bars" id="bars">
+          <!-- BARS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========== RRVBENCH ========== -->
+<section class="dark-sec" id="rrvbench">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">05 — New Benchmark</p>
+      <h2>RRVBench<span style="color:var(--tx-low);font-size:.55em;font-family:var(--mono);letter-spacing:0"> · Realistic Rumor Video Benchmark</span></h2>
+      <p class="lede" style="margin-top:18px">公开视频取证数据集里的假视频，多由一年以上发布的旧生成器合成。为跟上 AIGC 视频生成的演进速度，我们构建了 RRVBench：假视频全部由 <b style="color:var(--tx-hi)">7 个最新闭源</b>与 <b style="color:var(--tx-hi)">4 个最新开源</b>生成器合成，内容聚焦真实世界谣言场景，最大限度缩小应用鸿沟。</p>
+    </div>
+
+    <div class="rrv">
+      <div class="gen-list rv" id="genList">
+        <!-- GENS -->
+      </div>
+
+      <div class="rv">
+        <div class="lab" style="margin-bottom:22px">
+          <div class="lab-hd" style="justify-content:flex-start">最新假视频生成器 ● 真实视频伪造场景</div>
+          <p class="desc" style="margin-bottom:0">RRVBench 是视频评测中对泛化能力严苛的考验。有基线在某子集上表现尚可，却在新生成器上骤降——说明它锁定的是<b style="color:var(--tx)">生成器指纹</b>而非伪造本质。DeFakerOne2 的各子集分数相对稳定，最弱的子集仍显著高于外部方法的最佳成绩。</p>
+        </div>
+        <!-- ===== Fig.6 · 伪造样例 GIF 矩阵（4 行 × 3 列，每次打开随机排列） ===== -->
+        <figure style="margin:0">
+          <div class="fig on-dark giffig">
+            <div class="giffig-hd">
+              <b>Figure 6 · Forgery Samples</b>
+              <span>RRVBench 中聚焦真实谣言场景的伪造视频样例 — 首行 3 图为 1:1，其余 9 图为 2:1 宽幅；每次加载页面随机重排。</span>
+            </div>
+            <div class="gifmatrix" id="gifMatrix"><!-- GIF_MATRIX --></div>
+          </div>
+          <figcaption>Fig. 6 — RRVBench 中聚焦真实谣言场景的伪造视频样例（4 × 3 随机矩阵）。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== RESOURCES ========== -->
+<section class="light" id="resources">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">06 — Resources</p>
+      <h2>论文 · 代码 · 数据</h2>
+    </div>
+
+    <div class="res rv" style="margin-bottom:clamp(36px,4.5vw,56px)">
+      <div class="rcard"><span class="ic">▤</span><h3>Technical Report</h3><p>Venus-DeFakerOne2: A Vision-Forensics Foundation Model with Broader Coverage · 2026-09-01</p><a class="go" href="#" data-need="论文 PDF 链接">Paper (PDF) →</a></div>
+      <div class="rcard"><span class="ic">⌥</span><h3>Code</h3><p>推理与微调代码、模型权重发布计划</p><a class="go" href="https://github.com/venus-guangjian/Venus-DeFakerOne2" target="_blank" rel="noopener">GitHub →</a></div>
+      <div class="rcard"><span class="ic">▣</span><h3>RRVBench</h3><p>1,319 真实视频 + 11 个生成器子集，含评测协议</p><a class="go" href="#" data-need="RRVBench 下载链接">Benchmark →</a></div>
+      <div class="rcard"><span class="ic">◈</span><h3>Model</h3><p>DeFakerOne2-2B / 0.8B · Qwen3.5 backbone</p><a class="go" href="#" data-need="模型权重链接">Weights →</a></div>
+    </div>
+
+    <div class="rv">
+      <div class="copy-row">
+        <h3 style="font-size:20px">BibTeX</h3>
+        <button class="btn" id="copyBib" style="background:oklch(0 0 0 / .04);border-color:oklch(0 0 0 / .2);color:oklch(0.3 0.02 232)"><span class="k">⧉</span> Copy</button>
+      </div>
+      <pre class="bib" id="bibBox"><code>@article{guangjian2026defakerone2,
+  title   = {Venus-DeFakerOne2: A Vision-Forensics Foundation Model
+             with Broader Coverage},
+  author  = {Qu, Chenfan and Liang, Yachao and Fang, Mingqi and Xie, Jiangwei
+             and Chang, Zheng and Wang, Zhenming and Zhang, Baoyue and
+             Jin, Fanli and Jiang, Changjiang and Li, Junchi and Wang, Haoyue
+             and Zhu, Xuekang and others},
+  journal = {GuangJian Team, Ant Group — Technical Report},
+  year    = {2026},
+  note    = {\url{https://github.com/venus-guangjian/Venus-DeFakerOne2}}
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <p style="font-family:var(--serif);font-size:18px;color:var(--tx);letter-spacing:0">Venus-DeFakerOne2</p>
+      <p>GuangJian Team · Ant Group<br>Date: September 1, 2026</p>
+    </div>
+    <div style="text-align:right">
+      <p>Chief contributor: Chenfan Qu<br>Main contributors: Yachao Liang · Mingqi Fang<br>Project supervisors: Jingjing Liu · Jian Liu · Weiqiang Wang</p>
+      <p style="margin-top:10px"><a href="#top" style="color:var(--tx-mid)">↑ Back to top</a></p>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   DATA — 全部取自论文原文，集中置顶便于核对/替换
+   ============================================================ */
+const D = {
+  /* 矩阵四象限详情（来源：Sec.1 / Sec.3.3 / Sec.5） */
+  cells: {
+    di: {
+      dom: "Digital × Image",
+      title: "数字图像伪造",
+      desc: "在像素或隐空间完成的篡改。DeFakerOne (V1) 的能力边界止步于此；V2 在保留该域优势的同时把它并入统一表征空间。",
+      tasks: [
+        ["DeepFake Detection", "Sec. 5.2.1"],
+        ["AI-Generated Image Detection", "Sec. 5.2.2"],
+        ["Tampered Document Detection", "Sec. 5.2.3"],
+        ["Manipulated Natural Image Detection", "Sec. 5.2.4"],
+        ["Pixel-level Manipulation Localization", "Sec. 5.4"]
+      ],
+      v1: "已覆盖", v2: "SOTA", avg: "87.8 → 91.8"
+    },
+    dv: {
+      dom: "Digital × Video",
+      title: "数字视频伪造",
+      desc: "AIGC 视频与视频级篡改。伪迹可能驻留在帧内纹理或跨帧上下文中——这正是 Modality Synergism 要解决的模态两难。",
+      tasks: [
+        ["RRVBench", "Sec. 5.3.3"],
+        ["GenBuster-ID、GenBuster-OOD、GenBuster++", "Sec. 5.3.1"],
+        ["RABench", "Sec. 5.3.2"],
+        ["LOKI", "Sec. 5.3.1"],
+        ["VideoPhy2", "Sec. 5.3.1"],
+      ],
+      v1: "未覆盖", v2: "SOTA", avg: "64.4 → 96.0"
+    },
+    pi: {
+      dom: "Physical × Image",
+      title: "物理图像攻击",
+      desc: "面具呈现攻击、证件翻拍/屏幕重放等物理形式伪造。V1 完全在此范围之外，V2 把该域从接近随机猜测拉升到可用水平。",
+      tasks: [
+        ["CASIA-FASD Image", "Sec. 5.2.5"],
+        ["OULU-NPU Image", "Sec. 5.2.5"],
+        ["MSU-MFSD Image", "Sec. 5.2.5"],
+        ["DLC2021 Image", "Sec. 5.2.5"],
+        ["SCVD Image", "Sec. 5.2.5"],
+      ],
+      v1: "未覆盖", v2: "SOTA", avg: "50.7 → 87.2"
+    },
+    pv: {
+      dom: "Physical × Video",
+      title: "物理视频攻击",
+      desc: "视频形式的人脸活体与证件防伪攻击，是生物识别核验与内容风控的真实威胁面。V2 在该象限取得大跨度的提升。",
+      tasks: [
+        ["CASIA-FASD Video", "Sec. 5.2.5"],
+        ["OULU-NPU Video", "Sec. 5.2.5"],
+        ["MSU-MFSD Video", "Sec. 5.2.5"],
+        ["DLC2021 Video", "Sec. 5.2.5"],
+        ["SCVD Video", "Sec. 5.2.5"],
+      ],
+      v1: "未覆盖", v2: "SOTA", avg: "50.7 → 95.8"
+    }
+  },
+
+  /* 领域平均分柱状图（来源：Sec.1 / Sec.5.5 摘要数据） */
+  bars: [
+    { n: "DeepFake Image",            s: "人脸图像伪造检测",        sota: 88.2, v1: 95.8, v2: 96.7 },
+    { n: "AI-Generated Image",        s: "AI生成图像检测",          sota: 79.9, v1: 87.5, v2: 93.3 },
+    { n: "Tampered Document Image",   s: "伪造文档图像检测",        sota: 59.1, v1: 81.4, v2: 87.6 },
+    { n: "Manipulated Natural Image", s: "伪造自然图像检测",        sota: 71.5, v1: 86.7, v2: 89.6 },
+    { n: "Physical Image Forgery",    s: "物理图像伪造检测",        sota: 70.2, v1: 80.4, v2: 90.9 },
+    { n: "Digital Video Forgery",     s: "数字视频伪造检测",        sota: 87.2, v1: 69.9, v2: 96.1 },
+    { n: "Physical Video Forgery",    s: "物理视频伪造检测",        sota: 70.2, v1: 80.4, v2: 95.3 },
+    { n: "RABench",                   s: "真实生成谣言视频检测",    sota: 63.4, v1: 49.3, v2: 96.3 },
+    { n: "ManipulationBench",         s: "最新生成器AI生成图像检测", sota: 70.8, v1: 48.6, v2: 71.7 },
+    { n: "RRVBench",                  s: "最新生成器AI生成视频检测", sota: 69.8, v1: 52.3, v2: 95.3 },
+    { n: "In-house Data",             s: "业务真实图像攻击测试数据",   sota: 91.4, v1: 87.12, v2: 96.36, ts: "91.4", t1: "87.12", t2: "96.36" }
+  ],
+
+  /* 关键 benchmark 表格（来源：Sec.5.3.3 / Table 摘要 / Sec.5.9） */
+  table: [
+    { b:"RRVBench",      s:"11 生成器子集 · 谣言视频", trad:"55.3", mllm:"67.8", best:"67.8", v1:"49.8", v2:"95.3", rk:"#1 / 12" },
+    { b:"RABench",       s:"文字·logo 级视频编辑",     trad:"—",    mllm:"—",    best:"—",    v1:"—",    v2:"96.3", rk:"#1" },
+    { b:"In-house Data1",s:"真实攻击流量 · FPR=1e-3",  trad:"95.13",mllm:"93.93",best:"95.13",v1:"94.11",v2:"95.70",rk:"#1 / 7" },
+    { b:"In-house Data2",s:"真实攻击流量 · FPR=1e-3",  trad:"81.63",mllm:"92.77",best:"92.77",v1:"86.12",v2:"97.39",rk:"#1 / 7" },
+    { b:"In-house Data3",s:"真实攻击流量 · FPR=1e-3",  trad:"72.59",mllm:"85.94",best:"85.94",v1:"81.12",v2:"95.98",rk:"#1 / 7" },
+    { b:"In-house Data4",s:"最难切片 · FPR=1e-3",      trad:"15.66",mllm:"—",    best:"79.86",v1:"—",    v2:"82.41",rk:"#1 / 4" }
+  ],
+
+  /* RRVBench 生成器构成（来源：Sec.4） */
+  // gens: [
+  //   { n:"SeeDance-2.5",   s:"Closed-source · ByteDance Seed", c:700, t:"c" },
+  //   { n:"Closed Engine 2",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"Closed Engine 3",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"Closed Engine 4",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"Closed Engine 5",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"Closed Engine 6",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"Closed Engine 7",s:"Closed-source · 待补具体名称",    c:0,   t:"c" },
+  //   { n:"MiniMax-H3",     s:"Open-source",                     c:0,   t:"o" },
+  //   { n:"Wan2.2",         s:"Open-source",                     c:0,   t:"o" },
+  //   { n:"Open Engine 3",  s:"Open-source · 待补具体名称",       c:0,   t:"o" },
+  //   { n:"Open Engine 4",  s:"Open-source · 待补具体名称",       c:0,   t:"o" },
+  //   { n:"Authentic",      s:"真实视频 · real-world rumor",      c:1319,t:"o" }
+  // ],
+  gens: [
+    { n:"SeeDance-2.5",   s:"Closed-source · ByteDance Seed", c:700, t:"c" },
+    { n:"Kling-V3 Video",s:"Closed-source · Kuaishou Kling",    c:200,   t:"c" },
+    { n:"Wan-2.6",s:"Closed-source · Alibaba Tongyi",    c:200,   t:"c" },
+    { n:"Vidu2-Image",s:"Closed-source · Shengshu Tech",    c:400,   t:"c" },
+    { n:"Happyhorse-1.1",s:"Closed-source · Alibaba ATH",    c:400,   t:"c" },
+    { n:"Kling-V3-Omni Video",s:"Closed-source · Kuaishou Kling",    c:200,   t:"c" },
+    { n:"Wan-2.6-Flash",s:"Closed-source · Alibaba Tongyi",    c:200,   t:"c" },
+    { n:"MiniMax-H3",s:"Open-source · MiniMax Team",                     c:3336,   t:"o" },
+    { n:"JoyAI-Echo",s:"Open-source · Jingdong JoyAI",                     c:3920,   t:"o" },
+    { n:"HunYuan-Video-1.5",  s:"Open-source · Tecent HunYuan",       c:740,   t:"o" },
+    { n:"LongCatVideo",  s:"Open-source · Meituan LongCat",       c:504,   t:"o" },
+    { n:"Authentic",      s:"Real Videos",      c:1319,t:"o" }
+  ],
+
+  /* 待补素材清单 */
+  assets: [
+    { p:"hi",  t:"Figure 3 · 总体框架图", d:"方法章节的主视觉", s:"论文 <code>Figure 3</code> 矢量源文件（<code>.pdf/.svg</code>）或 PNG @2x，宽度 ≥ 1600px。SVG 优先——缩放后文字仍清晰。" },
+    { p:"hi",  t:"象限样例素材 · demos/", d:"Capability Boundary 下方 Real/Fake 双轨轮播的数据源", s:"网页同目录建 <code>demos/</code>，下含 8 个子文件夹（<code>real|fake × digital|physical × image|video</code>）。图像为 <code>.jpg/.png/.webp</code>，视频统一导出 <code>.gif</code>；文件名建议 <code>1.gif / 2.gif …</code> 连号（页面会自动探测），或在每个文件夹放 <code>list.txt</code> 逐行列出文件名。" },
+    { p:"hi",  t:"像素级定位可视化", d:"Results 章节最有说服力的一屏", s:"输入图 / GT mask / Ours pred / Baseline pred 的网格对比，4–6 组样例，每格 ≥ 512px。" },
+    { p:"hi",  t:"论文与代码链接", d:"导航与资源卡的真实 URL", s:"arXiv/内部 PDF 链接、GitHub 仓库（当前为 <code>venus-guangjian/Venus-DeFakerOne2</code>，需确认是否已公开）、模型权重下载地址。" },
+    { p:"mid", t:"RRVBench 样例视频", d:"Benchmark 章节的动态展示", s:"3–4 段谣言场景假视频（<code>.mp4</code>，H.264，≤ 5MB/段，静音循环自动播放）。无视频时可退化为关键帧拼图。" },
+    { p:"mid", t:"RRVBench 生成器完整名单", d:"当前列表中 9 项标为「待补」", s:"Sec.4 中 7 个闭源 + 4 个开源生成器的准确名称与各子集视频数量，用于补全生成器列表。" },
+    { p:"mid", t:"t-SNE / UMAP 特征可视化", d:"表征空间章节（可选扩展）", s:"论文 Sec.5.8 的特征分布图，可新增一个「表征空间」章节展示跨域聚类结构。" },
+    { p:"mid", t:"团队 logo 与作者头像", d:"页脚与作者区", s:"蚂蚁集团 / 光鉴团队官方 logo（SVG），以及需公开的作者头像（涉及隐私，未提供则保持当前纯文字署名）。" },
+    { p:"mid", t:"完整作者名单与贡献", d:"当前仅展示核心贡献者", s:"Sec.9 的完整作者列表与贡献分工，以及论文中 <code>Professor1-4</code> 占位的真实署名。" },
+    { p:"mid", t:"品牌色确认", d:"当前配色为自主推导", s:"若有团队 VI 规范色值，提供后可一键替换 <code>:root</code> 中的 <code>--real</code> / <code>--fake</code> / 暗底变量。" }
+  ]
+};
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+
+/* --- 矩阵详情 --- */
+function renderCell(key){
+  const c = D.cells[key]; if(!c) return;
+  $("#mxDetail").innerHTML = `
+    <div class="dom">${c.dom}</div>
+    <h3>${c.title}</h3>
+    <p style="font-size:14.6px;color:var(--tx-mid);margin:12px 0 0">${c.desc}</p>
+    <ul>${c.tasks.map(([t,s])=>`<li><b>${t}</b> <span style="font-family:var(--mono);font-size:12px;color:var(--tx-low)">${s}</span></li>`).join("")}</ul>
+    <dl class="kv">
+      <dt>DeFakerOne V1</dt><dd>${c.v1}</dd>
+      <dt>DeFakerOne2</dt><dd>${c.v2}</dd>
+      <dt>Δ / Avg</dt><dd>${c.avg}</dd>
+    </dl>`;
+}
+$$(".cell").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    $$(".cell").forEach(b=>b.setAttribute("aria-pressed","false"));
+    btn.setAttribute("aria-pressed","true");
+    renderCell(btn.dataset.cell);
+  });
+});
+renderCell("di");
+
+/* ============================================================
+   Fig.1 图位 · Real / Fake 双轨恒速轮播
+   数据源：同目录 demos/<folder>/，视频象限内文件均为 .gif
+   象限 → 两个文件夹（real 轨 / fake 轨）
+   ============================================================ */
+const DEMO_CFG = {
+  root: "demos",
+  /* 恒定线速度：像素 / 秒（改这里即可整体加减速） */
+  speed: 60,
+  exts: ["gif", "jpg", "jpeg", "png", "webp"],
+  /* 文件名模板系列：每个系列独立探测，命中首项即跑完该系列 */
+  series: [
+    i => `${i}`,
+    i => `0${i}`.slice(-2),
+    i => `${i}`.padStart(3, "0"),
+    i => `img_${i}`,
+    i => `image_${i}`,
+    i => `sample_${i}`,
+    i => `frame_${i}`,
+    i => `demo_${i}`
+  ],
+  maxIndex: 80,        /* 每个系列最多探测到的序号 */
+  maxMiss: 4,          /* 批尾连续失败多少次即认为已到末尾 */
+  batch: 8,            /* 并行探测的批大小 */
+  maxPerSeg: 16        /* 每条轨道单段最多渲染样本数（超出等距抽样）——GIF 会持续解码，控制并发量 */
+};
+
+const QUADRANT_DEMOS = {
+  di: { label:"Digital × Image", real:"real_digital_image", fake:"fake_digital_image" },
+  dv: { label:"Digital × Video", real:"real_digital_video", fake:"fake_digital_video" },
+  pi: { label:"Physical × Image", real:"real_physical_image", fake:"fake_physical_image" },
+  pv: { label:"Physical × Video", real:"real_physical_video", fake:"fake_physical_video" }
+};
+
+/* --- 探测某个 demos 子文件夹内的可用图片（并行，适配单文件夹 30+ 样本） --- */
+function probeFolder(dir){
+  const base = `${DEMO_CFG.root}/${dir}/`;
+
+  const tryUrl = url => new Promise(res=>{
+    const im = new Image();
+    im.decoding = "async";
+    im.onload  = ()=>res(url);
+    im.onerror = ()=>res(null);
+    im.src = url;
+  });
+  /* 一个候选文件名的所有扩展名并行探测，返回首个命中 */
+  const tryName = async name => {
+    const hits = await Promise.all(DEMO_CFG.exts.map(e=>tryUrl(base + name + "." + e)));
+    return hits.find(Boolean) || null;
+  };
+
+  return (async ()=>{
+    const found = [];
+    const seen = new Set();
+    const push = u=>{ if(u && !seen.has(u)){ seen.add(u); found.push(u); } };
+
+    /* 0) 优先读 list.txt（手工清单可完全跳过探测） */
+    try{
+      const r = await fetch(base + "list.txt", {cache:"no-store"});
+      if(r.ok){
+        const names = (await r.text()).split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0, 200);
+        (await Promise.all(names.map(n=>tryUrl(base + n)))).forEach(push);
+        if(found.length) return found;
+      }
+    }catch(_){ /* file:// 下 fetch 不可用，静默走探测 */ }
+
+    /* 1) 用 index=1 并行判定哪些命名系列有效（一轮 8 系列 × 5 扩展名） */
+    const first = await Promise.all(DEMO_CFG.series.map(fn=>tryName(fn(1))));
+
+    /* 命中的扩展名锁定为后续探测的首选，请求量降到 1/5 */
+    const locked = [];
+    first.forEach(u=>{
+      if(!u) return;
+      const ext = u.slice(u.lastIndexOf(".") + 1).toLowerCase();
+      if(!locked.includes(ext)) locked.push(ext);
+    });
+    const exts = locked.length ? locked : DEMO_CFG.exts;
+
+    /* 2) 对有效系列分批并行探测后续序号，批尾连续失败即认为到末尾 */
+    for(let si=0;si<DEMO_CFG.series.length;si++){
+      if(!first[si]) continue;
+      const fn = DEMO_CFG.series[si];
+      push(first[si]);
+      let tailMiss = 0;
+      for(let i=2;i<=DEMO_CFG.maxIndex;i+=DEMO_CFG.batch){
+        const idxs = [];
+        for(let j=i;j<Math.min(i + DEMO_CFG.batch, DEMO_CFG.maxIndex + 1);j++) idxs.push(j);
+        const batch = await Promise.all(idxs.map(async j=>{
+          const hits = await Promise.all(exts.map(e=>tryUrl(base + fn(j) + "." + e)));
+          return hits.find(Boolean) || null;
+        }));
+        batch.forEach(push);
+        for(let k=batch.length-1;k>=0;k--){ if(batch[k]) break; tailMiss++; }
+        if(tailMiss >= DEMO_CFG.maxMiss) break;
+      }
+    }
+    return found;
+  })();
+}
+
+/* --- 构建单条轨道：分段复制 + 位移一个分段宽 → 真无缝 --- */
+function armReveal(root){
+  root.querySelectorAll("img").forEach(im=>{
+    if(im.complete && im.naturalWidth){ im.classList.add("ok"); return; }
+    im.addEventListener("load", ()=>im.classList.add("ok"), {once:true});
+  });
+}
+
+function makeItem(rowEl, src){
+  const item = document.createElement("div");
+  item.className = "dm-item";
+  const im = document.createElement("img");
+  /* 不用 lazy：横向 transform 容器内 lazy 不会触发，后段会一直空白 */
+  im.decoding = "async";
+  im.src = src;
+  im.alt = (rowEl.dataset.kind === "real" ? "Real sample · " : "Fake sample · ") + src.split("/").pop();
+  /* 保留格子（含占位）而非移除节点，确保各分段等宽、循环不跳帧 */
+  im.addEventListener("error", ()=>{
+    im.style.display = "none";
+    const m = document.createElement("span");
+    m.className = "dm-miss";
+    m.textContent = src.split("/").pop();
+    item.appendChild(m);
+  }, {once:true});
+  item.appendChild(im);
+  return item;
+}
+
+function buildTrack(rowEl, urlsAll){
+  rowEl.querySelectorAll(".dm-track,.dm-empty").forEach(n=>n.remove());
+  rowEl._urls = urlsAll;
+
+  if(!urlsAll.length){
+    const empty = document.createElement("div");
+    empty.className = "dm-empty";
+    empty.innerHTML = `<b>No samples found</b>
+      <span>请在网页同目录放置 <code>demos/${rowEl.dataset.dir}/</code>，<br>文件名为 <code>1.gif / 2.gif …</code>（或在该文件夹内放 <code>list.txt</code> 逐行列出文件名）。</span>`;
+    rowEl.appendChild(empty);
+    return;
+  }
+
+  /* 样本过多时等距抽样，保留多样性同时控制并发解码量 */
+  let urls = urlsAll;
+  const cap = DEMO_CFG.maxPerSeg;
+  if(urls.length > cap){
+    const step = urls.length / cap;
+    urls = Array.from({length: cap}, (_, i)=>urlsAll[Math.floor(i * step)]);
+  }
+
+  const track = document.createElement("div");
+  track.className = "dm-track";
+
+  const seg0 = document.createElement("div");
+  seg0.className = "dm-seg";
+  urls.forEach(src=>seg0.appendChild(makeItem(rowEl, src)));
+  track.appendChild(seg0);
+  rowEl.appendChild(track);
+
+  /* 按容器宽度决定复制份数：保证轨道 ≥ 2 倍可视宽，两侧都不会露底 */
+  const segW = seg0.offsetWidth;
+  let k = segW > 0 ? Math.ceil(rowEl.clientWidth * 2 / segW) : 2;
+  k = Math.max(2, Math.min(4, k));
+  track.style.setProperty("--loop", (1 / k).toFixed(6));
+  for(let c=1;c<k;c++){
+    const clone = seg0.cloneNode(true);
+    clone.setAttribute("aria-hidden", "true");
+    track.appendChild(clone);
+  }
+  armReveal(track);
+  fitSpeed(rowEl);
+}
+
+/* --- 恒定线速度：位移一个分段宽所需时间 = 分段宽 / speed --- */
+function fitSpeed(rowEl){
+  const track = rowEl.querySelector(".dm-track");
+  const seg = track && track.querySelector(".dm-seg");
+  if(!seg) return;
+  const segW = seg.offsetWidth;
+  if(segW < 8) return;
+  track.style.animationDuration = (segW / DEMO_CFG.speed).toFixed(2) + "s";
+}
+
+/* --- 切换象限 --- */
+let demoToken = 0;
+async function renderDemos(key){
+  const cfg = QUADRANT_DEMOS[key] || QUADRANT_DEMOS.di;
+  const rows = $$("#demoFig .dm-row");
+  const token = ++demoToken;
+
+  $("#dmQuadrant").textContent = cfg.label;
+  rows[0].dataset.dir = cfg.real;
+  rows[1].dataset.dir = cfg.fake;
+  $("#dmTagReal").textContent = "Real · " + cfg.real;
+  $("#dmTagFake").textContent = "Fake · " + cfg.fake;
+  rows.forEach(r=>{ r.style.opacity = .35; });
+
+  const [realUrls, fakeUrls] = await Promise.all([
+    probeFolder(cfg.real), probeFolder(cfg.fake)
+  ]);
+  if(token !== demoToken) return;   /* 期间已切换象限，丢弃过期结果 */
+
+  buildTrack(rows[0], realUrls);
+  buildTrack(rows[1], fakeUrls);
+  rows.forEach(r=>{ r.style.transition = "opacity .45s ease"; r.style.opacity = 1; });
+}
+
+$$(".cell").forEach(btn=>{
+  btn.addEventListener("click", ()=>renderDemos(btn.dataset.cell));
+});
+renderDemos("di");
+
+/* 触屏无 hover：点按暂停/继续，并相应改写提示文案 */
+(function(){
+  const fig = $("#demoFig");
+  const hint = $("#dmPauseHint");
+  if(!fig || !hint) return;
+  const coarse = window.matchMedia && window.matchMedia("(hover:none)").matches;
+  if(coarse) hint.textContent = "点按暂停";
+  fig.addEventListener("click", e=>{
+    if(!coarse) return;                 /* 桌面端交给 :hover，避免双重切换 */
+    if(e.target.closest(".dm-hd")) return;
+    fig.classList.toggle("dm-tap-paused");
+    hint.textContent = fig.classList.contains("dm-tap-paused") ? "已暂停 · 点按继续" : "点按暂停";
+  });
+})();
+
+/* 尺寸变化时重算复制份数与时长，保证恒速与无缝 */
+let dmRaf = 0;
+window.addEventListener("resize", ()=>{
+  clearTimeout(dmRaf);
+  dmRaf = setTimeout(()=>{
+    $$("#demoFig .dm-row").forEach(row=>{
+      if(row._urls && row._urls.length) buildTrack(row, row._urls);
+    });
+  }, 220);
+});
+
+/* --- 柱状图 --- */
+$("#bars").innerHTML = D.bars.map((b,i)=>`
+  <div class="brow">
+    <div class="bn">${b.n}<small>${b.s}</small></div>
+    <div class="btrack">
+      <div class="bfill sota" style="width:${b.sota}%;animation-delay:${i*90}ms"><span>${(b.ts ?? b.sota.toFixed(1))}</span></div>
+      <div class="bfill v1" style="width:${b.v1}%;animation-delay:${i*90+90}ms"><span>${(b.t1 ?? b.v1.toFixed(1))}</span></div>
+      <div class="bfill v2" style="width:${b.v2}%;animation-delay:${i*90+180}ms"><span>${(b.t2 ?? b.v2.toFixed(1))}</span></div>
+    </div>
+  </div>`).join("");
+
+/* --- 表格（已移除，保留空实现防止引用报错） --- */
+
+/* --- 生成器列表 --- */
+$("#genList").innerHTML = D.gens.map(g=>`
+  <div class="gen">
+    <div class="gn">${g.n}<small>${g.s}</small></div>
+    <div class="cnt">${g.c ? g.c.toLocaleString() + " videos" : "—"}</div>
+    <div class="tp ${g.t}">${g.t==="c" ? "Closed" : (g.n==="Authentic" ? "Real" : "Open")}</div>
+  </div>`).join("");
+
+/* ============================================================
+   INTERACTION 1 — TIDE
+   ============================================================ */
+const tideRange = $("#tideRange"), tideOut = $("#tideOut");
+const PHASES = [
+  { at:0,  name:"Adaptation Ebb",      train:"LoRA" },
+  { at:34, name:"Full-Parameter Flood",train:"Full-Param" },
+  { at:70, name:"Hard-Sample Ebb",     train:"LoRA (regularizer)" }
+];
+function setTide(v){
+  v = +v;
+  tideOut.textContent = v + "%";
+  let idx = 0;
+  for(let i=PHASES.length-1;i>=0;i--){ if(v >= PHASES[i].at){ idx = i; break; } }
+  $$("#phases .ph").forEach((el,i)=>el.classList.toggle("on", i===idx));
+}
+tideRange.addEventListener("input", e=>setTide(e.target.value));
+setTide(tideRange.value);
+
+/* ============================================================
+   INTERACTION 2 — ENTROPY ROUTING
+   ============================================================ */
+const evRange = $("#evRange");
+function H(p){ p = Math.min(Math.max(p,1e-6),1-1e-6); return -(p*Math.log2(p) + (1-p)*Math.log2(1-p)); }
+function setRoute(v){
+  v = +v;                                   /* 时序证据占比 0-100 */
+  $("#evOut").textContent = v + "%";
+  const t = v/100;
+  /* 时序证据占比越高 → video 模态越确定（熵越低），frame 模态被冗余时序 token 稀释 */
+  const confV = 0.5 + 0.47*t;               /* video 置信度随 t 上升 */
+  const confF = 0.97 - 0.44*t;              /* frame 置信度随 t 下降 */
+  const hV = H(Math.min(Math.max(confV,.5),.999));
+  const hF = H(Math.min(Math.max(confF,.5),.999));
+  $("#hVideo").textContent = hV.toFixed(2);
+  $("#hFrame").textContent = hF.toFixed(2);
+  $("#bVideo").style.width = Math.min(100, hV/1*100).toFixed(0) + "%";
+  $("#bFrame").style.width = Math.min(100, hF/1*100).toFixed(0) + "%";
+  $("#predVideo").textContent = `pred: ${confV>=.5?"Fake":"Real"} · p=${confV.toFixed(2)}`;
+  $("#predFrame").textContent = `pred: ${confF>=.5?"Fake":"Real"} · p=${confF.toFixed(2)}`;
+
+  const videoWins = hV <= hF;
+  $("#modVideo").classList.toggle("win", videoWins);
+  $("#modVideo").classList.toggle("lose", !videoWins);
+  $("#modFrame").classList.toggle("win", !videoWins);
+  $("#modFrame").classList.toggle("lose", videoWins);
+  $("#verdictTxt").innerHTML = `采纳 <b>${videoWins?"Video":"Frame"}</b> 模态预测`;
+  $("#verdictWhy").textContent = videoWins
+    ? `H(video)=${hV.toFixed(2)} < H(frame)=${hF.toFixed(2)} → 原生视频更确定 · 证据集中在时序动态与跨帧上下文（闪烁、运动不一致）`
+    : `H(frame)=${hF.toFixed(2)} < H(video)=${hV.toFixed(2)} → 帧序列更确定 · 证据集中在单帧纹理（文字/logo 级编辑）`;
+  $("#bVideo").style.background = videoWins ? "var(--real)" : "var(--fake-dim)";
+  $("#bFrame").style.background = videoWins ? "var(--fake-dim)" : "var(--real)";
+}
+evRange.addEventListener("input", e=>setRoute(e.target.value));
+setRoute(evRange.value);
+
+/* ============================================================
+   INTERACTION 3 — CALIBRATION τ(p)
+   ============================================================ */
+const pRange = $("#pRange");
+function setP(v){
+  const p = (+v)/100;
+  const tau = 0.75 - p/2;                    /* 论文 Eq.(1) */
+  $("#pOut").textContent = p.toFixed(2);
+  const topPct = (1 - tau) * 100;            /* 刻度上 0.75 在 25%，0.25 在 75% */
+  $("#tauLine").style.top = topPct + "%";
+  $("#tauTag").style.top = topPct + "%";
+  $("#tauTag").textContent = "τ = " + tau.toFixed(2);
+  $("#zoneRej").style.height = topPct + "%";
+  $("#zoneAcc").style.height = (100 - topPct) + "%";
+  $("#tauRead").innerHTML = `τ = <em>${tau.toFixed(3)}</em> · 由 p = <i>${p.toFixed(2)}</i> 推导`;
+  $("#tauMini").textContent = tau.toFixed(3);
+
+  let policy, fin;
+  if(p > 0.66){ policy = `宽松：弱篡改线索被保留，<i>召回优先</i>（全局置信伪造，把信心传给像素分支）`; fin = `Fake · conf <em>${(0.86+0.12*p).toFixed(4)}</em>`; }
+  else if(p < 0.34){ policy = `保守：仅极显著异常通过，<em>压制假阳</em>（直接攻击真实图上的过分割主错误模式）`; fin = `Real · conf <i>${(0.86+0.12*(1-p)).toFixed(4)}</i>`; }
+  else { policy = `中性：τ ≈ 0.5，退化为传统固定阈值二值化（<em>不注入全局证据不支持的偏置</em>）`; fin = `Uncertain · conf <em>${(0.5+0.1).toFixed(4)}</em>`; }
+  $("#policyRead").innerHTML = policy;
+  $("#finalRead").innerHTML = fin;
+}
+pRange.addEventListener("input", e=>setP(e.target.value));
+setP(pRange.value);
+
+/* ============================================================
+   数字滚动 + 滚动揭示
+   ============================================================ */
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function countUp(el){
+  const target = parseFloat(el.dataset.count), dec = +(el.dataset.dec||0);
+  const suffix = el.querySelector("em") ? el.querySelector("em").outerHTML : "";
+  if(reduce){ el.innerHTML = target.toFixed(dec) + suffix; return; }
+  const t0 = performance.now(), dur = 1300;
+  (function step(now){
+    const k = Math.min(1, (now-t0)/dur), e = 1-Math.pow(1-k,3);
+    el.innerHTML = (target*e).toFixed(dec) + suffix;
+    if(k<1) requestAnimationFrame(step);
+  })(t0);
+}
+const io = new IntersectionObserver(es=>{
+  es.forEach(en=>{
+    if(!en.isIntersecting) return;
+    en.target.classList.add("in");
+    if(en.target.classList.contains("stat")) countUp(en.target.querySelector(".n"));
+    io.unobserve(en.target);
+  });
+},{threshold:.18, rootMargin:"0px 0px -8% 0px"});
+$$(".rv, .stat").forEach(el=>io.observe(el));
+
+/* ---------- 图片淡入：teaser.png / figure2.png ---------- */
+(function(){
+  const imgs = $$(".fade-img");
+  if(!imgs.length) return;
+  const show = img => { img.classList.add("is-shown"); };
+  const ioImg = new IntersectionObserver(es=>{
+    es.forEach(en=>{
+      if(!en.isIntersecting) return;
+      const img = en.target;
+      ioImg.unobserve(img);
+      if(img.complete && img.naturalWidth > 0){
+        requestAnimationFrame(()=>show(img));
+      }else{
+        img.addEventListener("load", ()=>show(img), {once:true});
+        img.addEventListener("error", ()=>show(img), {once:true});
+        /* 兜底：解码异常或长耗时缓存时也要可见，避免空白 */
+        setTimeout(()=>show(img), 4000);
+      }
+    });
+  },{threshold:0, rootMargin:"120px 0px"});
+  imgs.forEach(img=>{
+    if(img.complete && img.naturalWidth > 0){ show(img); return; }
+    ioImg.observe(img);
+  });
+})();
+
+/* --- BibTeX 复制 --- */
+$("#copyBib").addEventListener("click", async ()=>{
+  const txt = $("#bibBox").innerText;
+  const btn = $("#copyBib");
+  try{
+    await navigator.clipboard.writeText(txt);
+    btn.innerHTML = '<span class="k">✓</span> Copied';
+  }catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); btn.innerHTML = '<span class="k">✓</span> Copied'; }
+    catch(_){ btn.innerHTML = '<span class="k">!</span> 请手动复制'; }
+    ta.remove();
+  }
+  setTimeout(()=>{ btn.innerHTML = '<span class="k">⧉</span> Copy'; }, 2000);
+});
+
+/* --- Fig.6 · GIF 样例矩阵：4 行 × 3 列，每次加载随机排列 --- */
+(function(){
+  const GIF_DIR = "videos/";
+  /* 首行：1:1 正方形样例 */
+  const SQUARE_GIFS = ["b1.gif", "covid2.gif", "zhan2.gif"];
+  /* 第 2–4 行：2:1 宽幅样例 */
+  const WIDE_GIFS = ["b2.gif","bing1.gif","bing2.gif","covid1.gif","o1.gif","o2.gif","zf1.gif","zf2.gif","zhan1.gif"];
+  const matrix = $("#gifMatrix");
+  if(!matrix) return;
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  function cell(src, ratio){
+    const d = document.createElement("div");
+    d.className = "gifcell " + (ratio === 1 ? "sq" : "wide");
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = "RRVBench 伪造视频样例 · " + src;
+    img.src = GIF_DIR + src;
+
+    /* GIF 缺失时给出诚实占位，而不是留破图图标 */
+    img.addEventListener("error", ()=>{
+      img.style.display = "none";
+      if(d.querySelector(".miss")) return;
+      const m = document.createElement("span");
+      m.className = "miss";
+      m.innerHTML = "<i>◇</i>" + src + "<br>待补素材";
+      d.appendChild(m);
+    });
+
+    d.appendChild(img);
+    return d;
+  }
+
+  function render(){
+    const squares = shuffle(SQUARE_GIFS);   /* 首行 3 格 · 1:1 */
+    const wides   = shuffle(WIDE_GIFS);     /* 第 2–4 行 9 格 · 2:1 */
+    const frag = document.createDocumentFragment();
+    squares.forEach(src => frag.appendChild(cell(src, 1)));
+    wides.forEach(src => frag.appendChild(cell(src, 2)));
+    matrix.innerHTML = "";
+    matrix.appendChild(frag);
+  }
+
+  render();
+})();
+
+/* --- 占位链接提示（未提供真实 URL 的资源卡） --- */
+$$("a.go[data-need]").forEach(a=>{
+  a.addEventListener("click", e=>{
+    e.preventDefault();
+    a.textContent = "⚠ 待补：" + a.dataset.need;
+    a.style.color = "oklch(0.5 0.12 60)";
+  });
+});
+</script>
+</body>
+</html>
